@@ -64,6 +64,14 @@ See [docs/install_pi.md](docs/install_pi.md) for the detailed walkthrough.
 - `thehaguerealestate`
 - `wobeco`
 - `nrw_wonen`
+- `vbent` (Vb&t: Delft and a 15 km radius, cookie-based API filters)
+
+Vb&t uses the `filter_properties` cookie on each paginated API request. Its
+search area is configured in `VBentScraper.filter_template` in
+[src/scrapers/sites/vbent.py](src/scrapers/sites/vbent.py). Rent and size limits
+remain unrestricted at the API level; your local profile filters still apply.
+Rent is the base monthly rent; service and parking charges are stored separately
+as metadata. Total rooms are not inferred to be bedrooms.
 
 Run only selected sources:
 - `./scripts/run_once.ps1 --sources thehaguerealestate,wobeco`

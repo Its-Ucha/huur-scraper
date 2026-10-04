@@ -19,7 +19,7 @@ sources:
     min_interval_seconds: 1200
     max_retries: 2
     auto_disable_on_block: true
-  - name: rotsvast
+  - name: rotsvast  
     mode: ALERT_INGEST
     min_interval_seconds: 1200
     max_retries: 2
@@ -50,6 +50,11 @@ sources:
     max_retries: 0
     auto_disable_on_block: true
   - name: vesteda
+    mode: SCRAPE
+    min_interval_seconds: 3600
+    max_retries: 0
+    auto_disable_on_block: true
+  - name: vbent
     mode: SCRAPE
     min_interval_seconds: 3600
     max_retries: 0

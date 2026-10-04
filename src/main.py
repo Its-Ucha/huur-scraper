@@ -12,6 +12,7 @@ from src.scrapers.runner import run_all_sources
 from src.scrapers.sites.nrw_wonen import NRWonenScraper
 from src.scrapers.sites.verra import VerraScraper
 from src.scrapers.sites.vesteda import VestedaScraper
+from src.scrapers.sites.vbent import VBentScraper
 from src.storage.sqlite_store import SQLiteStore
 from src.scrapers.sites.thehaguerealestate import TheHagueRealEstateScraper
 from src.scrapers.sites.wobeco import WobecoScraper
@@ -142,6 +143,7 @@ def main() -> None:
         "wobeco": WobecoScraper,
         "verra": VerraScraper,
         "vesteda": VestedaScraper,
+        "vbent": VBentScraper,
     }
 
     selected_sources = (
