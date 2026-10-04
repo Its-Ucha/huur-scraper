@@ -24,8 +24,8 @@ fi
 ./.venv/bin/python -m pip install --upgrade pip
 ./.venv/bin/python -m pip install -r requirements.txt
 
-# Escape paths used in quoted ExecStart and EnvironmentFile values.
-# ExecStart also interprets dollar signs, unlike EnvironmentFile.
+# Escape the executable path used in the quoted ExecStart command argument.
+# ExecStart also interprets dollar signs, which are escaped separately below.
 escape_systemd_path() {
   local value="$1"
   value="${value//\\/\\\\}"
@@ -39,7 +39,7 @@ if [[ "$project_dir" == *$'\n'* || "$project_dir" == *$'\r'* ]]; then
   exit 1
 fi
 
-# WorkingDirectory takes a literal path (including spaces), not a quoted word.
+# WorkingDirectory and EnvironmentFile take literal paths, not quoted words.
 # Only systemd specifiers need escaping here; quotes/backslashes remain literal.
 working_dir="${project_dir//%/%%}"
 escaped_project_dir="$(escape_systemd_path "$project_dir")"
@@ -49,7 +49,6 @@ service_group="$(id -gn)"
 
 service_content="$(< deploy/systemd/huur-scraper.service)"
 service_content="${service_content//@WORKING_DIR@/"$working_dir"}"
-service_content="${service_content//@PROJECT_DIR@/"$escaped_project_dir"}"
 service_content="${service_content//@EXEC_PROJECT_DIR@/"$exec_project_dir"}"
 service_content="${service_content//@SERVICE_USER@/"$service_user"}"
 service_content="${service_content//@SERVICE_GROUP@/"$service_group"}"
