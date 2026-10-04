@@ -5,13 +5,13 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-WorkingDirectory=/home/jordy207/huur-scraper
-ExecStart=/home/jordy207/huur-scraper/.venv/bin/python -m src.main --once
-EnvironmentFile=/home/jordy207/huur-scraper/.env
+WorkingDirectory="@PROJECT_DIR@"
+ExecStart="@EXEC_PROJECT_DIR@/.venv/bin/python" -m src.main --once
+EnvironmentFile="@PROJECT_DIR@/.env"
 StandardOutput=journal
 StandardError=journal
-User=jordy207
-Group=jordy207
+User=@SERVICE_USER@
+Group=@SERVICE_GROUP@
 
 [Install]
 WantedBy=multi-user.target
