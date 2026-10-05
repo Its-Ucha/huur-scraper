@@ -64,6 +64,24 @@ class DiscordSettingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "SCRAPE_INTERVAL_MINUTES"):
             _load({"SCRAPE_INTERVAL_MINUTES": "0"})
 
+    def test_listings_clear_defaults_to_monday_4_utc(self) -> None:
+        settings = _load({})
+        self.assertEqual(settings.listings_clear_weekday, 0)
+        self.assertEqual(settings.listings_clear_hour_utc, 4)
+        # docker-compose passes empty strings for unset stack variables.
+        self.assertEqual(_load({"LISTINGS_CLEAR_DAY": ""}).listings_clear_weekday, 0)
+
+    def test_listings_clear_day_names_and_off(self) -> None:
+        self.assertEqual(_load({"LISTINGS_CLEAR_DAY": " Sunday "}).listings_clear_weekday, 6)
+        self.assertEqual(_load({"LISTINGS_CLEAR_DAY": "fri"}).listings_clear_weekday, 4)
+        self.assertIsNone(_load({"LISTINGS_CLEAR_DAY": "off"}).listings_clear_weekday)
+
+    def test_listings_clear_invalid_values_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "LISTINGS_CLEAR_DAY"):
+            _load({"LISTINGS_CLEAR_DAY": "someday"})
+        with self.assertRaisesRegex(ValueError, "LISTINGS_CLEAR_HOUR_UTC"):
+            _load({"LISTINGS_CLEAR_HOUR_UTC": "24"})
+
     def test_log_file_path_default_and_empty(self) -> None:
         self.assertEqual(_load({}).log_file_path, Path("logs/huur_scraper.log"))
         self.assertIsNone(_load({"LOG_FILE_PATH": ""}).log_file_path)

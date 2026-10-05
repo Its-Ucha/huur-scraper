@@ -30,6 +30,8 @@ class Settings:
     discord_control_user_ids: list[int]
     discord_control_role_id: int | None
     scrape_interval_minutes: int
+    listings_clear_weekday: int | None
+    listings_clear_hour_utc: int
 
 
 def _parse_bool(value: str, default: bool) -> bool:
@@ -90,6 +92,27 @@ def _parse_interval_minutes() -> int:
     return value
 
 
+WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+CLEAR_DISABLED_VALUES = {"off", "none", "never", "false", "0"}
+
+
+def _parse_clear_weekday() -> int | None:
+    raw = os.getenv("LISTINGS_CLEAR_DAY", "").strip().lower() or "monday"
+    if raw in CLEAR_DISABLED_VALUES:
+        return None
+    for index, name in enumerate(WEEKDAYS):
+        if raw in (name, name[:3]):
+            return index
+    raise ValueError(f"LISTINGS_CLEAR_DAY must be a weekday name or 'off', got {raw!r}")
+
+
+def _parse_clear_hour() -> int:
+    value = int(os.getenv("LISTINGS_CLEAR_HOUR_UTC", "").strip() or "4")
+    if not 0 <= value <= 23:
+        raise ValueError(f"LISTINGS_CLEAR_HOUR_UTC must be between 0 and 23, got {value}")
+    return value
+
+
 def load_settings() -> Settings:
     load_dotenv()
 
@@ -121,4 +144,6 @@ def load_settings() -> Settings:
         discord_control_user_ids=_parse_id_list("DISCORD_CONTROL_USER_IDS"),
         discord_control_role_id=_parse_optional_id("DISCORD_CONTROL_ROLE_ID"),
         scrape_interval_minutes=_parse_interval_minutes(),
+        listings_clear_weekday=_parse_clear_weekday(),
+        listings_clear_hour_utc=_parse_clear_hour(),
     )

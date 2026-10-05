@@ -10,8 +10,11 @@ straight from this GitHub repo.
 2. **Bot** tab → **Reset Token** → copy it. This is `DISCORD_BOT_TOKEN`.
    No privileged intents are needed.
 3. **OAuth2** tab → copy the **Client ID**, then open (replace `CLIENT_ID`):
-   `https://discord.com/oauth2/authorize?client_id=CLIENT_ID&scope=bot+applications.commands&permissions=19456`
-   (19456 = View Channels + Send Messages + Embed Links) and add the bot to your server.
+   `https://discord.com/oauth2/authorize?client_id=CLIENT_ID&scope=bot+applications.commands&permissions=93184`
+   (93184 = View Channels + Send Messages + Embed Links + Read Message History + Manage Messages)
+   and add the bot to your server. Read Message History is needed for the weekly cleanup
+   of the alert channel; Manage Messages makes that cleanup a fast bulk delete (without it
+   the bot deletes its own messages one at a time).
 
 ## 2) Collect the IDs
 
@@ -27,6 +30,9 @@ In Discord: **User Settings → Advanced → Developer Mode** on. Then right-cli
 | `DISCORD_CONTROL_ROLE_ID` (alternative) | a role allowed to run them |
 
 Make sure the bot's role can see and post in the alert and ops channels.
+If you invited the bot earlier with `permissions=19456`, also give its role **Read Message
+History** (and optionally **Manage Messages**) in the alert channel, or the weekly cleanup fails
+with a `[CLEAR_ERROR]` ops message.
 
 ## 3) GitHub access token (private repo)
 
@@ -74,6 +80,12 @@ Copy the token.
 | `/profile` | everyone | current filters |
 | `/scrape [sources]` | control | run a cycle now (also while paused) |
 | `/pause`, `/resume` | control | stop/start scheduled scraping (survives redeploys) |
+
+Every week (`LISTINGS_CLEAR_DAY`, default `monday`, at `LISTINGS_CLEAR_HOUR_UTC`, default
+`4`) the bot deletes its own messages from the alert channel. Pinned messages and messages
+from people are kept. If the bot was offline at that time it catches up after it starts.
+Set `LISTINGS_CLEAR_DAY=off` to disable. On the first start after this feature is deployed
+nothing is deleted; the first cleanup happens at the next scheduled slot.
 
 Source error messages (`[SOURCE_ERROR]`, `[SOURCE_BLOCKED]`) are posted once when a
 source starts failing, and `[SOURCE_RECOVERED]` once when it works again.

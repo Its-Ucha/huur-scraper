@@ -30,6 +30,8 @@ def make_settings(**overrides) -> Settings:
         discord_control_user_ids=[],
         discord_control_role_id=None,
         scrape_interval_minutes=10,
+        listings_clear_weekday=None,
+        listings_clear_hour_utc=4,
     )
     values.update(overrides)
     return Settings(**values)

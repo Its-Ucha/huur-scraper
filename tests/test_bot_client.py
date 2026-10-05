@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import sqlite3
 import tempfile
 import threading
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.bot.client import CycleBusyError, HuurBot
+from src.bot.client import LISTINGS_CLEARED_AT_KEY, CycleBusyError, HuurBot
 from src.scrapers.runner import RunSummary, SourceResult
 from src.storage.sqlite_store import SQLiteStore
 from tests.helpers import RecordingNotifier, make_settings
@@ -109,6 +111,82 @@ class HuurBotCycleTests(unittest.IsolatedAsyncioTestCase):
     async def test_interval_comes_from_settings(self) -> None:
         bot = HuurBot(make_settings(discord_guild_id=1, scrape_interval_minutes=25), self.store)
         self.assertEqual(bot.scrape_loop.minutes, 25)
+
+
+def utc(day: int, hour: int) -> dt.datetime:
+    # 2026-10-05 is a Monday.
+    return dt.datetime(2026, 10, day, hour, tzinfo=dt.timezone.utc)
+
+
+class HuurBotClearTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.store = SQLiteStore(Path(self.tmp.name) / "bot.db")
+        settings = make_settings(discord_guild_id=1, listings_clear_weekday=0, listings_clear_hour_utc=4)
+        self.bot = HuurBot(settings, self.store)
+        self.notifier = RecordingNotifier()
+        self.bot.notifier = self.notifier
+        self.channel = MagicMock()
+        self.channel.purge = AsyncMock(return_value=[object(), object()])
+        self.channel.permissions_for.return_value = SimpleNamespace(manage_messages=False)
+        self.bot.alert_channel = self.channel
+
+    async def asyncTearDown(self) -> None:
+        self.tmp.cleanup()
+
+    async def test_first_start_records_time_without_clearing(self) -> None:
+        await self.bot.clear_tick(utc(5, 12))
+        self.channel.purge.assert_not_called()
+        self.assertEqual(self.store.get_state(LISTINGS_CLEARED_AT_KEY), utc(5, 12).isoformat())
+
+    async def test_clears_once_after_slot_passes(self) -> None:
+        self.store.set_state(LISTINGS_CLEARED_AT_KEY, utc(4, 12).isoformat())
+        await self.bot.clear_tick(utc(5, 3))
+        self.channel.purge.assert_not_called()
+
+        await self.bot.clear_tick(utc(5, 4))
+        self.channel.purge.assert_awaited_once()
+        kwargs = self.channel.purge.call_args.kwargs
+        self.assertEqual(kwargs["before"], utc(5, 4))
+        self.assertFalse(kwargs["bulk"])
+
+        await self.bot.clear_tick(utc(5, 5))
+        self.channel.purge.assert_awaited_once()
+
+    async def test_catches_up_on_missed_slot(self) -> None:
+        self.store.set_state(LISTINGS_CLEARED_AT_KEY, utc(1, 12).isoformat())
+        await self.bot.clear_tick(utc(7, 9))
+        self.channel.purge.assert_awaited_once()
+
+    async def test_only_own_unpinned_messages_are_deleted(self) -> None:
+        self.store.set_state(LISTINGS_CLEARED_AT_KEY, utc(1, 12).isoformat())
+        await self.bot.clear_tick(utc(5, 12))
+        check = self.channel.purge.call_args.kwargs["check"]
+        me = self.bot.user
+        self.assertTrue(check(SimpleNamespace(author=me, pinned=False)))
+        self.assertFalse(check(SimpleNamespace(author=me, pinned=True)))
+        self.assertFalse(check(SimpleNamespace(author=object(), pinned=False)))
+
+    async def test_uses_bulk_delete_with_manage_messages(self) -> None:
+        self.channel.permissions_for.return_value = SimpleNamespace(manage_messages=True)
+        self.store.set_state(LISTINGS_CLEARED_AT_KEY, utc(1, 12).isoformat())
+        await self.bot.clear_tick(utc(5, 12))
+        self.assertTrue(self.channel.purge.call_args.kwargs["bulk"])
+
+    async def test_failure_reported_once(self) -> None:
+        self.channel.purge.side_effect = RuntimeError("Missing Access")
+        self.store.set_state(LISTINGS_CLEARED_AT_KEY, utc(1, 12).isoformat())
+        with self.assertLogs("src.bot.client", level="ERROR"):
+            await self.bot.clear_tick(utc(5, 12))
+        await self.bot.clear_tick(utc(5, 13))
+        self.assertEqual(self.notifier.ops, ["[CLEAR_ERROR] Missing Access"])
+
+    async def test_disabled_does_nothing(self) -> None:
+        bot = HuurBot(make_settings(discord_guild_id=1), self.store)
+        bot.alert_channel = self.channel
+        self.store.set_state(LISTINGS_CLEARED_AT_KEY, utc(1, 12).isoformat())
+        await bot.clear_tick(utc(5, 12))
+        self.channel.purge.assert_not_called()
 
 
 if __name__ == "__main__":

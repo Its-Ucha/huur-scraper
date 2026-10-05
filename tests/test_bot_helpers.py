@@ -3,7 +3,12 @@ from __future__ import annotations
 import datetime as dt
 import unittest
 
-from src.bot.checks import is_control_user, parse_sources, validate_bot_settings
+from src.bot.checks import (
+    is_control_user,
+    last_scheduled_clear,
+    parse_sources,
+    validate_bot_settings,
+)
 from src.bot.embeds import (
     build_listings_embed,
     build_profile_embed,
@@ -160,6 +165,25 @@ class SummaryEmbedTests(unittest.TestCase):
 
     def test_empty_summary(self) -> None:
         self.assertEqual(build_summary_embed(RunSummary()).description, "No sources ran.")
+
+
+class LastScheduledClearTests(unittest.TestCase):
+    def at(self, day: int, hour: int, minute: int = 0) -> dt.datetime:
+        # 2026-10-05 is a Monday.
+        return dt.datetime(2026, 10, day, hour, minute, tzinfo=dt.timezone.utc)
+
+    def test_slot_later_today_goes_back_a_week(self) -> None:
+        self.assertEqual(last_scheduled_clear(self.at(5, 3, 59), 0, 4), self.at(5, 4) - dt.timedelta(days=7))
+
+    def test_slot_exactly_now(self) -> None:
+        self.assertEqual(last_scheduled_clear(self.at(5, 4), 0, 4), self.at(5, 4))
+
+    def test_mid_week_returns_last_monday(self) -> None:
+        self.assertEqual(last_scheduled_clear(self.at(8, 12), 0, 4), self.at(5, 4))
+
+    def test_weekday_after_today(self) -> None:
+        # Monday, slot on Sunday -> yesterday's Sunday.
+        self.assertEqual(last_scheduled_clear(self.at(5, 12), 6, 4), self.at(4, 4))
 
 
 if __name__ == "__main__":

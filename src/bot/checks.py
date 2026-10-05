@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 from collections.abc import Iterable
 
 from src.config import Settings
@@ -34,3 +35,12 @@ def parse_sources(text: str | None, known: Iterable[str]) -> tuple[set[str] | No
         return None, []
     unknown = sorted(names - set(known))
     return names, unknown
+
+
+def last_scheduled_clear(now: dt.datetime, weekday: int, hour: int) -> dt.datetime:
+    """Most recent weekly clear slot (weekday at hour:00, in now's timezone) at or before now."""
+    slot = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+    slot -= dt.timedelta(days=(now.weekday() - weekday) % 7)
+    if slot > now:
+        slot -= dt.timedelta(days=7)
+    return slot

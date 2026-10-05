@@ -7,6 +7,7 @@ import logging
 import discord
 from discord.ext import tasks
 
+from src.bot.checks import last_scheduled_clear
 from src.config import Settings
 from src.notify.base import Notifier
 from src.notify.discord_notifier import DiscordNotifier
@@ -18,6 +19,8 @@ from src.storage.sqlite_store import SQLiteStore
 logger = logging.getLogger(__name__)
 
 PAUSED_KEY = "paused"
+LISTINGS_CLEARED_AT_KEY = "listings_cleared_at"
+CLEAR_CHECK_MINUTES = 15
 FIRST_RUN_DELAY_SECONDS = 30
 
 
@@ -32,6 +35,7 @@ class HuurBot(discord.Client):
         self.store = store
         self.tree = discord.app_commands.CommandTree(self)
         self.notifier: Notifier | None = None
+        self.alert_channel = None
         self.last_cycle_at: dt.datetime | None = None
         self.exit_code = 0
         self._cycle_lock = asyncio.Lock()
@@ -75,6 +79,7 @@ class HuurBot(discord.Client):
             await self.close()
             return
 
+        self.alert_channel = alert_channel
         ops_channel = None
         if self.settings.discord_ops_channel_id is not None:
             ops_channel = await self._resolve_channel(self.settings.discord_ops_channel_id)
@@ -96,6 +101,8 @@ class HuurBot(discord.Client):
             self.settings.scrape_interval_minutes,
             self.paused,
         )
+        if self.settings.listings_clear_weekday is not None:
+            self.clear_loop.start()
 
     async def _resolve_channel(self, channel_id: int):
         channel = self.get_channel(channel_id)
@@ -155,3 +162,55 @@ class HuurBot(discord.Client):
     async def _before_scrape_loop(self) -> None:
         await self.wait_until_ready()
         await asyncio.sleep(FIRST_RUN_DELAY_SECONDS)
+
+    async def clear_tick(self, now: dt.datetime | None = None) -> None:
+        # Same rule as scheduled_tick: nothing may escape, or the loop stops for good.
+        try:
+            await self._clear_if_due(now or dt.datetime.now(tz=dt.timezone.utc))
+        except Exception as error:  # noqa: BLE001
+            logger.exception("Clearing the listings channel failed")
+            if self.notifier is not None:
+                await asyncio.to_thread(self.notifier.notify_ops, f"[CLEAR_ERROR] {error}")
+
+    async def _clear_if_due(self, now: dt.datetime) -> None:
+        weekday = self.settings.listings_clear_weekday
+        if weekday is None or self.alert_channel is None:
+            return
+        last_cleared = self.store.get_state(LISTINGS_CLEARED_AT_KEY)
+        if last_cleared is None:
+            # First start with this feature: keep the existing history and begin
+            # counting from the next slot instead of wiping the channel right away.
+            self.store.set_state(LISTINGS_CLEARED_AT_KEY, now.isoformat())
+            return
+        due = last_scheduled_clear(now, weekday, self.settings.listings_clear_hour_utc)
+        if dt.datetime.fromisoformat(last_cleared) >= due:
+            return
+        # Recorded before purging so a permission error is reported once, not every tick.
+        self.store.set_state(LISTINGS_CLEARED_AT_KEY, now.isoformat())
+        deleted = await self.clear_alert_channel(before=now)
+        logger.info("Cleared %d messages from the listings channel", deleted)
+
+    async def clear_alert_channel(self, before: dt.datetime) -> int:
+        channel = self.alert_channel
+        # Bulk delete needs Manage Messages; without it the bot can still delete
+        # its own messages one by one (slower, but fine for a week's worth).
+        me = getattr(channel.guild, "me", None)
+        bulk = me is not None and channel.permissions_for(me).manage_messages
+        deleted = await channel.purge(
+            limit=None,
+            before=before,
+            check=lambda message: message.author == self.user and not message.pinned,
+            bulk=bulk,
+            reason="Weekly listings channel cleanup",
+        )
+        return len(deleted)
+
+    @tasks.loop(minutes=CLEAR_CHECK_MINUTES)
+    async def clear_loop(self) -> None:
+        # Polls instead of firing at a fixed time, so a slot missed while the bot
+        # was down is caught up after the next start.
+        await self.clear_tick()
+
+    @clear_loop.before_loop
+    async def _before_clear_loop(self) -> None:
+        await self.wait_until_ready()
