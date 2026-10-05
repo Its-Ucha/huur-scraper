@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Sequence
 
 import discord
 
@@ -63,17 +64,17 @@ class DiscordNotifier:
         loop: asyncio.AbstractEventLoop,
         alert_channel,
         ops_channel=None,
-        mention_user_id: int | None = None,
+        mention_user_ids: Sequence[int] = (),
     ) -> None:
         self.loop = loop
         self.alert_channel = alert_channel
         self.ops_channel = ops_channel
-        self.mention_user_id = mention_user_id
+        self.mention_user_ids = list(mention_user_ids)
 
     def notify_listing(self, listing: Listing, match: MatchResult) -> None:
         content = None
-        if match.is_hard_match and self.mention_user_id:
-            content = f"<@{self.mention_user_id}>"
+        if match.is_hard_match and self.mention_user_ids:
+            content = " ".join(f"<@{user_id}>" for user_id in self.mention_user_ids)
         self._send(self.alert_channel, content, build_listing_embed(listing, match))
 
     def notify_ops(self, text: str) -> None:

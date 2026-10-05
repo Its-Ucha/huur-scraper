@@ -22,7 +22,7 @@ In Discord: **User Settings → Advanced → Developer Mode** on. Then right-cli
 | `DISCORD_GUILD_ID` | the server icon |
 | `DISCORD_ALERT_CHANNEL_ID` | the channel for listing alerts |
 | `DISCORD_OPS_CHANNEL_ID` (optional) | a channel for source errors/blocks |
-| `DISCORD_MENTION_USER_ID` (optional) | your own name, so hard matches ping you |
+| `DISCORD_MENTION_USER_ID` (optional) | users to ping on hard matches (comma-separated) |
 | `DISCORD_CONTROL_USER_IDS` | users allowed to run `/scrape`, `/pause`, `/resume` (comma-separated) |
 | `DISCORD_CONTROL_ROLE_ID` (alternative) | a role allowed to run them |
 

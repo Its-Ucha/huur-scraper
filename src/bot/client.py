@@ -88,7 +88,7 @@ class HuurBot(discord.Client):
             asyncio.get_running_loop(),
             alert_channel,
             ops_channel,
-            self.settings.discord_mention_user_id,
+            self.settings.discord_mention_user_ids,
         )
         self.scrape_loop.start()
         logger.info(

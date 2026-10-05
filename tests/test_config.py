@@ -25,7 +25,7 @@ class DiscordSettingsTests(unittest.TestCase):
         self.assertIsNone(settings.discord_guild_id)
         self.assertIsNone(settings.discord_alert_channel_id)
         self.assertIsNone(settings.discord_ops_channel_id)
-        self.assertIsNone(settings.discord_mention_user_id)
+        self.assertEqual(settings.discord_mention_user_ids, [])
         self.assertEqual(settings.discord_control_user_ids, [])
         self.assertIsNone(settings.discord_control_role_id)
         self.assertEqual(settings.scrape_interval_minutes, 10)
@@ -37,7 +37,7 @@ class DiscordSettingsTests(unittest.TestCase):
                 "DISCORD_GUILD_ID": " 123 ",
                 "DISCORD_ALERT_CHANNEL_ID": "456",
                 "DISCORD_OPS_CHANNEL_ID": "",
-                "DISCORD_MENTION_USER_ID": "789",
+                "DISCORD_MENTION_USER_ID": "789, 790",
                 "DISCORD_CONTROL_USER_IDS": " 111 , 222,, ",
                 "DISCORD_CONTROL_ROLE_ID": "333",
                 "SCRAPE_INTERVAL_MINUTES": "15",
@@ -47,7 +47,7 @@ class DiscordSettingsTests(unittest.TestCase):
         self.assertEqual(settings.discord_guild_id, 123)
         self.assertEqual(settings.discord_alert_channel_id, 456)
         self.assertIsNone(settings.discord_ops_channel_id)
-        self.assertEqual(settings.discord_mention_user_id, 789)
+        self.assertEqual(settings.discord_mention_user_ids, [789, 790])
         self.assertEqual(settings.discord_control_user_ids, [111, 222])
         self.assertEqual(settings.discord_control_role_id, 333)
         self.assertEqual(settings.scrape_interval_minutes, 15)

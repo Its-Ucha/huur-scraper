@@ -26,7 +26,7 @@ class Settings:
     discord_guild_id: int | None
     discord_alert_channel_id: int | None
     discord_ops_channel_id: int | None
-    discord_mention_user_id: int | None
+    discord_mention_user_ids: list[int]
     discord_control_user_ids: list[int]
     discord_control_role_id: int | None
     scrape_interval_minutes: int
@@ -117,7 +117,7 @@ def load_settings() -> Settings:
         discord_guild_id=_parse_optional_id("DISCORD_GUILD_ID"),
         discord_alert_channel_id=_parse_optional_id("DISCORD_ALERT_CHANNEL_ID"),
         discord_ops_channel_id=_parse_optional_id("DISCORD_OPS_CHANNEL_ID"),
-        discord_mention_user_id=_parse_optional_id("DISCORD_MENTION_USER_ID"),
+        discord_mention_user_ids=_parse_id_list("DISCORD_MENTION_USER_ID"),
         discord_control_user_ids=_parse_id_list("DISCORD_CONTROL_USER_IDS"),
         discord_control_role_id=_parse_optional_id("DISCORD_CONTROL_ROLE_ID"),
         scrape_interval_minutes=_parse_interval_minutes(),

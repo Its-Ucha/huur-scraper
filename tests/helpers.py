@@ -26,7 +26,7 @@ def make_settings(**overrides) -> Settings:
         discord_guild_id=None,
         discord_alert_channel_id=None,
         discord_ops_channel_id=None,
-        discord_mention_user_id=None,
+        discord_mention_user_ids=[],
         discord_control_user_ids=[],
         discord_control_role_id=None,
         scrape_interval_minutes=10,

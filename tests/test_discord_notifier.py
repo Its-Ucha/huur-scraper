@@ -91,15 +91,21 @@ class DiscordNotifierTests(unittest.TestCase):
 
     def test_hard_match_mentions_user(self) -> None:
         alert = FakeChannel(1)
-        notifier = DiscordNotifier(self.loop, alert, mention_user_id=42)
+        notifier = DiscordNotifier(self.loop, alert, mention_user_ids=[42])
         notifier.notify_listing(make_listing(), make_match(hard=True))
         self.assertEqual(len(alert.sent), 1)
         self.assertEqual(alert.sent[0]["content"], "<@42>")
         self.assertIsInstance(alert.sent[0]["embed"], discord.Embed)
 
+    def test_hard_match_mentions_every_user(self) -> None:
+        alert = FakeChannel(1)
+        notifier = DiscordNotifier(self.loop, alert, mention_user_ids=[42, 43])
+        notifier.notify_listing(make_listing(), make_match(hard=True))
+        self.assertEqual(alert.sent[0]["content"], "<@42> <@43>")
+
     def test_close_match_does_not_mention(self) -> None:
         alert = FakeChannel(1)
-        notifier = DiscordNotifier(self.loop, alert, mention_user_id=42)
+        notifier = DiscordNotifier(self.loop, alert, mention_user_ids=[42, 43])
         notifier.notify_listing(make_listing(), make_match(hard=False))
         self.assertIsNone(alert.sent[0]["content"])
 
