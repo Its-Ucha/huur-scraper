@@ -2,8 +2,13 @@ services:
   huur-scraper:
     build: .
     image: huur-scraper:latest
+    # Rebuild on every `up` so Portainer GitOps redeploys pick up new code.
+    pull_policy: build
     container_name: huur-scraper
     restart: unless-stopped
+    # Python runs as PID 1, which ignores SIGTERM; discord.py shuts down cleanly on SIGINT.
+    stop_signal: SIGINT
+    stop_grace_period: 40s
     volumes:
       - huur-data:/app/data
     environment:

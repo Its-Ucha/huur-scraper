@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 import tempfile
 import threading
 import unittest
@@ -85,6 +86,13 @@ class HuurBotCycleTests(unittest.IsolatedAsyncioTestCase):
         with patch("src.bot.client.run_all_sources") as runner:
             await self.bot.scheduled_tick()
         runner.assert_not_called()
+
+    async def test_scheduled_tick_survives_state_read_error(self) -> None:
+        # Any exception escaping the loop body stops discord.py's tasks.Loop for good.
+        with patch.object(self.store, "get_state", side_effect=sqlite3.OperationalError("database is locked")):
+            with self.assertLogs("src.bot.client", level="ERROR"):
+                await self.bot.scheduled_tick()
+        self.assertEqual(self.notifier.ops, ["[CYCLE_ERROR] database is locked"])
 
     async def test_scheduled_tick_runs_when_not_paused(self) -> None:
         with patch("src.bot.client.run_all_sources", return_value=RunSummary()) as runner:

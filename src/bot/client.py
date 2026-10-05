@@ -132,13 +132,19 @@ class HuurBot(discord.Client):
             return summary
 
     async def scheduled_tick(self) -> None:
-        if self.paused:
-            logger.info("Scheduler paused; skipping cycle")
-            return
+        # Any exception escaping here stops discord.py's tasks.Loop for good, so
+        # everything is caught and reported instead.
         try:
+            if self.paused:
+                logger.info("Scheduler paused; skipping cycle")
+                return
             await self.run_cycle()
         except CycleBusyError:
             logger.info("Previous cycle still running; skipping scheduled tick")
+        except Exception as error:  # noqa: BLE001
+            logger.exception("Scheduled tick failed")
+            if self.notifier is not None:
+                await asyncio.to_thread(self.notifier.notify_ops, f"[CYCLE_ERROR] {error}")
 
     @tasks.loop(minutes=10)
     async def scrape_loop(self) -> None:

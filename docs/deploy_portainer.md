@@ -42,8 +42,7 @@ Copy the token.
    compose path `docker-compose.yml`.
 4. **Authentication** on: username = your GitHub username, password = the token from step 3.
 5. **GitOps updates** on (polling, for example every 5 minutes) so pushes to `main` redeploy.
-   Enable **Re-pull image and redeploy** / force rebuild if your Portainer version offers it,
-   so code changes are rebuilt.
+   The compose file sets `pull_policy: build`, so each redeploy rebuilds the image.
 6. **Environment variables**: add at least `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`,
    `DISCORD_ALERT_CHANNEL_ID`, and `DISCORD_CONTROL_USER_IDS` (or `DISCORD_CONTROL_ROLE_ID`).
    Optional: everything else in `.env.example` (`MAX_RENT_EUR`, `MIN_SIZE_M2`, `ALLOWED_CITIES`, …).
@@ -80,7 +79,9 @@ docker exec huur-scraper python -m src.main --listings --limit 50
 docker exec huur-scraper python -m src.main --prune-non-matches
 ```
 
-`python -m src.main --once` also works there. It logs alerts instead of posting them to Discord.
+Do **not** run `python -m src.main --once` in the container. It shares the bot's
+database but only logs alerts. Any match it finds is stored as already seen, so the bot
+never posts it. Use `/scrape` in Discord instead.
 
 ## Data
 
