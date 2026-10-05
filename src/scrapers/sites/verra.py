@@ -30,7 +30,9 @@ class VerraScraper(BaseScraper):
             listing_id = str(listing_id_raw)
             url = f"https://www.verra.nl{item.get('url')}"
 
-            title = f"Verra listing {listing_id}"
+            address = item.get("address")
+            title = address.strip() if isinstance(address, str) and address.strip() else ""
+            title = title or f"Verra listing {listing_id}"
             city = item.get("city")
             city = city.strip() if isinstance(city, str) else None
 
