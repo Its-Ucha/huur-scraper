@@ -1,0 +1,35 @@
+services:
+  huur-scraper:
+    build: .
+    image: huur-scraper:latest
+    container_name: huur-scraper
+    restart: unless-stopped
+    volumes:
+      - huur-data:/app/data
+    environment:
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID}
+      DISCORD_ALERT_CHANNEL_ID: ${DISCORD_ALERT_CHANNEL_ID}
+      DISCORD_OPS_CHANNEL_ID: ${DISCORD_OPS_CHANNEL_ID:-}
+      DISCORD_MENTION_USER_ID: ${DISCORD_MENTION_USER_ID:-}
+      DISCORD_CONTROL_USER_IDS: ${DISCORD_CONTROL_USER_IDS:-}
+      DISCORD_CONTROL_ROLE_ID: ${DISCORD_CONTROL_ROLE_ID:-}
+      SCRAPE_INTERVAL_MINUTES: ${SCRAPE_INTERVAL_MINUTES:-10}
+      USER_AGENT: ${USER_AGENT:-huur-scraper/0.1}
+      MAX_WORKERS: ${MAX_WORKERS:-2}
+      REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS:-20}
+      MAX_RENT_EUR: ${MAX_RENT_EUR:-1000}
+      MIN_SIZE_M2: ${MIN_SIZE_M2:-40}
+      PREFERRED_BEDROOMS: ${PREFERRED_BEDROOMS:-2}
+      ALLOW_CLOSE_MATCH: ${ALLOW_CLOSE_MATCH:-true}
+      STORE_ONLY_MATCHES: ${STORE_ONLY_MATCHES:-true}
+      ALLOWED_CITIES: ${ALLOWED_CITIES:-Den Haag,Delft,Rijswijk,Voorburg,Leidschendam,Nootdorp,Ypenburg}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  huur-data:
