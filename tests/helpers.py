@@ -1,0 +1,69 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from src.config import Settings
+from src.filtering.rules import MatchResult
+from src.models.listing import Listing
+
+
+def make_settings(**overrides) -> Settings:
+    values = dict(
+        database_path=Path("unused.db"),
+        user_agent="test-agent",
+        max_workers=1,
+        request_timeout_seconds=5,
+        max_rent_eur=1000,
+        min_size_m2=40,
+        preferred_bedrooms=2,
+        allow_close_match=True,
+        store_only_matches=True,
+        allowed_cities=["Den Haag", "Delft"],
+        log_level="INFO",
+        log_file_path=None,
+        log_to_console=False,
+        discord_bot_token="",
+        discord_guild_id=None,
+        discord_alert_channel_id=None,
+        discord_ops_channel_id=None,
+        discord_mention_user_id=None,
+        discord_control_user_ids=[],
+        discord_control_role_id=None,
+        scrape_interval_minutes=10,
+    )
+    values.update(overrides)
+    return Settings(**values)
+
+
+def make_listing(**overrides) -> Listing:
+    values = dict(
+        source_site="alpha",
+        source_listing_id="1",
+        source_url="https://example.com/listing/1",
+        title="Teststraat 1",
+        city="Delft",
+        rent_price=900,
+        living_area_m2=50,
+        rooms_total=3,
+        bedrooms=2,
+        available_from=None,
+        raw_features={},
+    )
+    values.update(overrides)
+    return Listing(**values)
+
+
+def make_match(hard: bool = True, score: int = 95) -> MatchResult:
+    return MatchResult(is_hard_match=hard, is_close_match=not hard, score=score, reasons=[])
+
+
+class RecordingNotifier:
+    def __init__(self) -> None:
+        self.listings: list[tuple[Listing, MatchResult]] = []
+        self.ops: list[str] = []
+
+    def notify_listing(self, listing: Listing, match: MatchResult) -> None:
+        self.listings.append((listing, match))
+
+    def notify_ops(self, text: str) -> None:
+        self.ops.append(text)
