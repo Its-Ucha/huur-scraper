@@ -43,10 +43,18 @@ Copy the token.
 4. **Authentication** on: username = your GitHub username, password = the token from step 3.
 5. **GitOps updates** on (polling, for example every 5 minutes) so pushes to `main` redeploy.
    The compose file sets `pull_policy: build`, so each redeploy rebuilds the image.
-6. **Environment variables**: add at least `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`,
+6. **Environment variables**: on your own machine, copy `.env.example` to `.env` (it is
+   gitignored) and fill in at least `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`,
    `DISCORD_ALERT_CHANNEL_ID`, and `DISCORD_CONTROL_USER_IDS` (or `DISCORD_CONTROL_ROLE_ID`).
-   Optional: everything else in `.env.example` (`MAX_RENT_EUR`, `MIN_SIZE_M2`, `ALLOWED_CITIES`, …).
-   Unset values use the defaults in `docker-compose.yml`.
+   In the stack editor, click **Load variables from .env file** and select that file.
+   Portainer imports every line as a stack variable.
+   - Write values without quotes. Portainer would keep the quotes as part of the value.
+   - Delete or comment out optional lines you leave empty. Unset values use the defaults
+     in `docker-compose.yml`.
+   - Path and logging settings (`DATABASE_PATH`, `LOG_FILE_PATH`, …) are ignored here.
+     The image sets them.
+   - Your secrets stay out of GitHub and are stored only in Portainer. To change a value
+     later, edit it under the stack's Environment variables and click **Update the stack**.
 7. **Deploy the stack**.
 
 ## 5) Check it works
