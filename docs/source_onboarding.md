@@ -23,7 +23,7 @@ For each source:
 1. Find one stable listing overview URL for your area and budget.
 2. Add a new scraper file in `src/scrapers/sites/<source>.py`.
 3. Parse listing cards from overview page only first (URL + title + price + city).
-4. Add scraper class to `source_factories` in `src/main.py`.
+4. Add scraper class to `SOURCE_FACTORIES` in `src/scrapers/factories.py`.
 5. Add policy entry in `src/config/sources.yaml` with conservative interval.
 6. Run single-source test:
    - `./scripts/run_once.ps1 --sources <source>` (Pi equivalent: `.venv/bin/python -m src.main --once --sources <source>`)
