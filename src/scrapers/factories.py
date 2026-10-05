@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.scrapers.base import BaseScraper
+from src.scrapers.sites.bpd_woningfonds import BpdWoningfondsScraper
+from src.scrapers.sites.ikwilhuren import IkwilhurenScraper
 from src.scrapers.sites.nrw_wonen import NRWonenScraper
 from src.scrapers.sites.thehaguerealestate import TheHagueRealEstateScraper
 from src.scrapers.sites.vbent import VBentScraper
@@ -20,4 +22,6 @@ SOURCE_FACTORIES: dict[str, type[BaseScraper]] = {
     "verra": VerraScraper,
     "vesteda": VestedaScraper,
     "vbent": VBentScraper,
+    "bpd_woningfonds": BpdWoningfondsScraper,
+    "ikwilhuren": IkwilhurenScraper,
 }

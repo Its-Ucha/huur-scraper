@@ -59,3 +59,13 @@ sources:
     min_interval_seconds: 3600
     max_retries: 0
     auto_disable_on_block: true
+  - name: bpd_woningfonds
+    mode: SCRAPE
+    min_interval_seconds: 1200
+    max_retries: 2
+    auto_disable_on_block: true
+  - name: ikwilhuren
+    mode: SCRAPE
+    min_interval_seconds: 1200
+    max_retries: 2
+    auto_disable_on_block: true
