@@ -76,6 +76,14 @@ class SQLiteStore:
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS bot_state (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )
+                """
+            )
 
     def upsert_listing(self, listing: Listing) -> UpsertResult:
         listing.stamp_seen()
@@ -222,3 +230,35 @@ class SQLiteStore:
                 cursor = connection.execute("DELETE FROM listings WHERE dedupe_key = ?", (key,))
                 deleted += cursor.rowcount
         return deleted
+
+    def get_state(self, key: str, default: str | None = None) -> str | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT value FROM bot_state WHERE key = ?", (key,)
+            ).fetchone()
+        return row["value"] if row is not None else default
+
+    def set_state(self, key: str, value: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO bot_state (key, value) VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (key, value),
+            )
+
+    def get_latest_source_runs(self) -> list[sqlite3.Row]:
+        with self._connect() as connection:
+            return connection.execute(
+                """
+                SELECT runs.source_site, runs.run_at, runs.status, runs.details
+                FROM source_runs AS runs
+                JOIN (
+                    SELECT source_site, MAX(id) AS max_id
+                    FROM source_runs
+                    GROUP BY source_site
+                ) AS latest ON runs.id = latest.max_id
+                ORDER BY runs.source_site
+                """
+            ).fetchall()

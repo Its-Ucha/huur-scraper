@@ -1,9 +1,9 @@
 # First run on Windows (local)
 
-You can run this without Telegram first.
+You can run this without Discord first; CLI runs write alerts to the log.
 
 ## 1) Python and venv
-- Install Python 3.11+
+- Install Python 3.12+
 - In PowerShell:
   - `./scripts/setup_local.ps1`
 
@@ -11,7 +11,7 @@ This script uses only `./.venv/Scripts/python.exe` and does not install globally
 
 ## 2) Environment file
 - Copy `.env.example` to `.env`
-- You can leave `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` empty for first run
+- You can leave the `DISCORD_*` values empty for CLI runs
 
 ## 3) First run
 - `./scripts/run_once.ps1`
@@ -22,9 +22,7 @@ The SQLite database is auto-created at `data/huur_scraper.db`.
 Use any SQLite viewer or run:
 - `.\.venv\Scripts\python.exe -c "import sqlite3; c=sqlite3.connect('data/huur_scraper.db'); print(c.execute('select count(*) from listings').fetchone())"`
 
-## 5) Optional Telegram setup (later)
-1. In Telegram, open `@BotFather`, create bot, copy token.
-2. Send a message to your bot.
-3. Find your chat id (for private chat often your numeric user id).
-4. Put token/id in `.env`.
-5. Re-run `./scripts/run_once.ps1`.
+## 5) Run the Discord bot locally (optional)
+1. Create the bot and collect the IDs as in [deploy_portainer.md](deploy_portainer.md) steps 1–2.
+2. Put the `DISCORD_*` values in `.env`.
+3. Run `.\.venv\Scripts\python.exe -m src.bot` and try `/status` in your server.

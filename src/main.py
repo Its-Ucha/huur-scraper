@@ -2,20 +2,15 @@ from __future__ import annotations
 
 import argparse
 import logging
-from pathlib import Path
 
 from src.config import load_settings
 from src.filtering.rules import evaluate_listing
 from src.logging_setup import configure_logging
 from src.models.listing import Listing
+from src.notify.base import LogNotifier
+from src.scrapers.factories import REGISTRY_FILE, SOURCE_FACTORIES
 from src.scrapers.runner import run_all_sources
-from src.scrapers.sites.nrw_wonen import NRWonenScraper
-from src.scrapers.sites.verra import VerraScraper
-from src.scrapers.sites.vesteda import VestedaScraper
-from src.scrapers.sites.vbent import VBentScraper
 from src.storage.sqlite_store import SQLiteStore
-from src.scrapers.sites.thehaguerealestate import TheHagueRealEstateScraper
-from src.scrapers.sites.wobeco import WobecoScraper
 
 
 def _fmt(value: object) -> str:
@@ -137,31 +132,21 @@ def main() -> None:
         logger.info("Pruned non-matches deleted=%d total_before=%d", deleted, total)
         return
 
-    source_factories = {
-        "nrw_wonen": NRWonenScraper,
-        "thehaguerealestate": TheHagueRealEstateScraper,
-        "wobeco": WobecoScraper,
-        "verra": VerraScraper,
-        "vesteda": VestedaScraper,
-        "vbent": VBentScraper,
-    }
-
     selected_sources = (
         {item.strip() for item in args.sources.split(",") if item.strip()}
         if args.sources
         else None
     )
 
-    registry_file = Path("src/config/sources.yaml")
-
-    run_all_sources(
+    summary = run_all_sources(
         settings=settings,
         store=store,
-        source_factories=source_factories,
-        registry_file=registry_file,
+        source_factories=SOURCE_FACTORIES,
+        registry_file=REGISTRY_FILE,
+        notifier=LogNotifier(),
         selected_sources=selected_sources,
     )
-    logger.info("Run completed")
+    logger.info("Run completed alerted=%d", summary.alerted)
 
 
 if __name__ == "__main__":
