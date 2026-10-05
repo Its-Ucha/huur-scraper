@@ -93,6 +93,7 @@ class VestedaScraper(BaseScraper):
                 "asset_type": str(item.get("entitysubtypelabel") or ""),
                 "furniture": "",
                 "district": str(item.get("district") or ""),
+                "image_url": str(item.get("imageBig") or ""),
             }
 
             rent_price = item.get("priceUnformatted")

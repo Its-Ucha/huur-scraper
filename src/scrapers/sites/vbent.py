@@ -77,6 +77,7 @@ class VBentScraper(BaseScraper):
 		status = self._as_dict(item.get("status"))
 		property_type = self._as_dict(self._as_dict(item.get("attributes")).get("type"))
 		status_label = self._text(status.get("name")) or "unknown"
+		image_path = self._text(item.get("image"))
 		# Only code 1 is confirmed available; do not infer other numeric codes.
 		is_available = self.map_status_to_available(
 			status.get("name"), default=status.get("code") == 1
@@ -100,6 +101,7 @@ class VBentScraper(BaseScraper):
 				"service_charges": str(rental.get("serviceCharges", "")),
 				"parking_charges": str(prices.get("parkingCharges", "")),
 				"parking_service_charges": str(prices.get("parkingServiceCharges", "")),
+				"image_url": urljoin(self.base_url, image_path) if image_path else "",
 			},
 			is_available=is_available,
 			listing_status=status_label,

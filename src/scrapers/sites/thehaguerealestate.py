@@ -45,6 +45,7 @@ class TheHagueRealEstateScraper(BaseScraper):
                 "house_number": f"{item.get('address', {}).get('huisnummer', {}).get('hoofdnummer', '')}{item.get('address', {}).get('huisnummer', {}).get('toevoeging', '')}",
                 "asset_type": str(item.get("object_type") or ""),
                 "furniture": str(item.get("furniture_type") or ""),
+                "image_url": self._featured_photo_url(item),
             }
 
             rent_price = item.get("price")
@@ -83,3 +84,10 @@ class TheHagueRealEstateScraper(BaseScraper):
 
         unique: dict[str, Listing] = {item.source_listing_id: item for item in listings}
         return list(unique.values())
+
+    @staticmethod
+    def _featured_photo_url(item: dict) -> str:
+        photo = item.get("featured_photo")
+        if not isinstance(photo, dict):
+            return ""
+        return str(photo.get("provider_link") or "")

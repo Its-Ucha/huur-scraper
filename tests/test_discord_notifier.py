@@ -58,10 +58,65 @@ class ListingEmbedTests(unittest.TestCase):
         self.assertEqual(embed.footer.text, "Close match")
 
     def test_missing_values_render_na(self) -> None:
-        listing = make_listing(rent_price=None, living_area_m2=None, bedrooms=None, city=None)
+        listing = make_listing(rent_price=None, living_area_m2=None, city=None)
         fields = _fields(build_listing_embed(listing, make_match()))
-        for name in ("Price", "Area", "Bedrooms", "City"):
+        for name in ("Price", "Area", "City"):
             self.assertEqual(fields[name], "n/a")
+
+    def test_extra_details_shown(self) -> None:
+        listing = make_listing(
+            rooms_total=3,
+            bedrooms=2,
+            available_from="2026-11-01T00:00:00.000Z",
+            raw_features={
+                "street": "Teststraat",
+                "house_number": "12A",
+                "postal_code": "2611 AB",
+                "district": "Centrum",
+                "asset_type": "Appartement",
+                "furniture": "Gestoffeerd",
+                "image_url": "https://cdn.example.com/1.jpg",
+            },
+        )
+        embed = build_listing_embed(listing, make_match())
+        fields = _fields(embed)
+        self.assertEqual(fields["Rooms"], "3")
+        self.assertEqual(fields["Bedrooms"], "2")
+        self.assertEqual(fields["Available"], "1 Nov 2026")
+        self.assertEqual(fields["Address"], "Teststraat 12A, 2611 AB · Centrum")
+        self.assertEqual(fields["Type"], "Appartement")
+        self.assertEqual(fields["Furnishing"], "Gestoffeerd")
+        self.assertEqual(embed.thumbnail.url, "https://cdn.example.com/1.jpg")
+
+    def test_optional_details_hidden_when_missing(self) -> None:
+        listing = make_listing(rooms_total=None, bedrooms=None, available_from=None, raw_features={})
+        embed = build_listing_embed(listing, make_match())
+        fields = _fields(embed)
+        for name in ("Rooms", "Bedrooms", "Available", "Address", "Type", "Furnishing"):
+            self.assertNotIn(name, fields)
+        self.assertIsNone(embed.thumbnail.url)
+        self.assertTrue(all(value.strip() for value in fields.values()))
+
+    def test_whitespace_only_details_hidden(self) -> None:
+        listing = make_listing(
+            available_from="  ",
+            raw_features={"street": " ", "house_number": "", "asset_type": "  ", "furniture": " "},
+        )
+        fields = _fields(build_listing_embed(listing, make_match()))
+        for name in ("Available", "Address", "Type", "Furnishing"):
+            self.assertNotIn(name, fields)
+
+    def test_vbent_property_type_used_for_type(self) -> None:
+        listing = make_listing(raw_features={"property_type": "apartment"})
+        self.assertEqual(_fields(build_listing_embed(listing, make_match()))["Type"], "apartment")
+
+    def test_non_date_available_shown_as_text(self) -> None:
+        listing = make_listing(available_from="Per direct")
+        self.assertEqual(_fields(build_listing_embed(listing, make_match()))["Available"], "Per direct")
+
+    def test_relative_image_url_not_used(self) -> None:
+        listing = make_listing(raw_features={"image_url": "/images/x"})
+        self.assertIsNone(build_listing_embed(listing, make_match()).thumbnail.url)
 
     def test_long_title_truncated_to_discord_limit(self) -> None:
         embed = build_listing_embed(make_listing(title="x" * 400), make_match())

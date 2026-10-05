@@ -51,6 +51,20 @@ class VBentScraperTests(unittest.TestCase):
         self.assertEqual(listing.raw_features["parking_charges"], "0")
         self.assertEqual(listing.source_url, self.scraper.base_url + HOUSE["url"])
 
+    def test_image_path_made_absolute(self) -> None:
+        house = dict(HOUSE, image="/images/a3b16a-w300-s-fwj/stationsplein-6-g3")
+        listing = self.scraper._parse_house(house)
+        assert listing is not None
+        self.assertEqual(
+            listing.raw_features["image_url"],
+            "https://vbtverhuurmakelaars.nl/images/a3b16a-w300-s-fwj/stationsplein-6-g3",
+        )
+
+    def test_missing_image_is_empty(self) -> None:
+        listing = self.scraper._parse_house(HOUSE)
+        assert listing is not None
+        self.assertEqual(listing.raw_features["image_url"], "")
+
     def test_cookie_pagination_and_deduplication(self) -> None:
         second = dict(HOUSE, id="second")
         with patch.object(self.scraper, "fetch_json", side_effect=[

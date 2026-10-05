@@ -48,6 +48,7 @@ class VerraScraper(BaseScraper):
                 "house_number": str(item.get("address", "").split(" ")[-1]),
                 "asset_type": str(item.get("mainType") or ""),
                 "furniture": "",
+                "image_url": str(item.get("photo") or ""),
             }
 
             rent_price = item.get("rentalsPrice")
