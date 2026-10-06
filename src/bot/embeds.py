@@ -118,8 +118,7 @@ def build_summary_embed(summary: RunSummary) -> discord.Embed:
         icon = STATUS_ICONS.get(result.status, "•")
         if result.status == "ok":
             lines.append(
-                f"{icon} **{result.name}** · {result.listings} listings · "
-                f"{result.changed} changed · {result.alerted} alerted"
+                f"{icon} **{result.name}** · {result.listings} listings · {result.changed} changed"
             )
         else:
             lines.append(f"{icon} **{result.name}** · {truncate(result.details, 100)}")

@@ -17,7 +17,6 @@ class Settings:
     min_size_m2: int
     preferred_bedrooms: int
     allow_close_match: bool
-    store_only_matches: bool
     allowed_cities: list[str]
     log_level: str
     log_file_path: Path | None
@@ -126,7 +125,6 @@ def load_settings() -> Settings:
         min_size_m2=int(os.getenv("MIN_SIZE_M2", "40")),
         preferred_bedrooms=int(os.getenv("PREFERRED_BEDROOMS", "2")),
         allow_close_match=_parse_bool(os.getenv("ALLOW_CLOSE_MATCH", "true"), True),
-        store_only_matches=_parse_bool(os.getenv("STORE_ONLY_MATCHES", "true"), True),
         allowed_cities=_parse_cities(
             os.getenv(
                 "ALLOWED_CITIES",

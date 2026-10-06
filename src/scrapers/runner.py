@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from src.config import Settings
-from src.filtering.rules import evaluate_listing
 from src.notify.base import Notifier
 from src.policy.risk_policy import is_collection_allowed
 from src.scrapers.base import SourceBlockedError
@@ -26,17 +25,14 @@ class SourceResult:
     status: str
     listings: int = 0
     changed: int = 0
-    alerted: int = 0
     details: str = ""
 
 
 @dataclass
 class RunSummary:
     results: list[SourceResult] = field(default_factory=list)
-
-    @property
-    def alerted(self) -> int:
-        return sum(result.alerted for result in self.results)
+    # Set by the caller after dispatching; the runner itself never alerts.
+    alerted: int = 0
 
 
 def _now() -> str:
@@ -107,50 +103,15 @@ def run_all_sources(
             health_tracker.mark_success(policy.name)
             logger.info("Source=%s returned %d listings", policy.name, len(listings))
 
-            evaluated_count = 0
-            skipped_non_match_count = 0
             changed_count = 0
-            alerted_count = 0
-
             for listing in listings:
-                evaluated_count += 1
-                match = evaluate_listing(listing, settings)
-                is_match = match.is_hard_match or match.is_close_match
-
-                if settings.store_only_matches and not is_match:
-                    skipped_non_match_count += 1
-                    continue
-
-                upsert = store.upsert_listing(listing)
-                if not upsert.changed:
-                    continue
-                changed_count += 1
-
-                if not is_match:
-                    continue
-
-                notifier.notify_listing(listing, match)
-                alerted_count += 1
-
+                if store.upsert_listing(listing).changed:
+                    changed_count += 1
             logger.info(
-                "Source=%s changed=%d alerted=%d",
-                policy.name,
-                changed_count,
-                alerted_count,
-            )
-            logger.info(
-                "Source=%s evaluated=%d skipped_non_match=%d store_only_matches=%s",
-                policy.name,
-                evaluated_count,
-                skipped_non_match_count,
-                settings.store_only_matches,
+                "Source=%s listings=%d changed=%d", policy.name, len(listings), changed_count
             )
 
-            details = (
-                f"listings={len(listings)},evaluated={evaluated_count},"
-                f"skipped_non_match={skipped_non_match_count},changed={changed_count},"
-                f"alerted={alerted_count},store_only_matches={settings.store_only_matches}"
-            )
+            details = f"listings={len(listings)},changed={changed_count}"
             store.write_source_run(
                 source_site=policy.name,
                 run_at=_now(),
@@ -163,7 +124,6 @@ def run_all_sources(
                     status="ok",
                     listings=len(listings),
                     changed=changed_count,
-                    alerted=alerted_count,
                     details=details,
                 )
             )

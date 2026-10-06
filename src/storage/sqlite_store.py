@@ -236,39 +236,6 @@ class SQLiteStore:
                 (safe_limit,),
             ).fetchall()
 
-    def get_all_listings_for_prune(self) -> list[sqlite3.Row]:
-        with self._connect() as connection:
-            return connection.execute(
-                """
-                SELECT
-                    dedupe_key,
-                    source_site,
-                    source_listing_id,
-                    source_url,
-                    title,
-                    city,
-                    rent_price,
-                    living_area_m2,
-                    rooms_total,
-                    bedrooms,
-                    available_from,
-                    is_available,
-                    listing_status
-                FROM listings
-                """
-            ).fetchall()
-
-    def delete_listings_by_keys(self, dedupe_keys: list[str]) -> int:
-        if not dedupe_keys:
-            return 0
-
-        deleted = 0
-        with self._connect() as connection:
-            for key in dedupe_keys:
-                cursor = connection.execute("DELETE FROM listings WHERE dedupe_key = ?", (key,))
-                deleted += cursor.rowcount
-        return deleted
-
     def get_state(self, key: str, default: str | None = None) -> str | None:
         with self._connect() as connection:
             row = connection.execute(

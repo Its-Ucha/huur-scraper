@@ -82,17 +82,17 @@ class RunnerTests(unittest.TestCase):
     def result(self, summary, name):
         return next(r for r in summary.results if r.name == name)
 
-    def test_alerts_only_new_matches(self) -> None:
+    def test_stores_every_listing_and_counts_changes(self) -> None:
         first = self.run_once()
         alpha = self.result(first, "alpha")
-        self.assertEqual((alpha.status, alpha.listings, alpha.changed, alpha.alerted), ("ok", 2, 1, 1))
-        self.assertEqual(len(self.notifier.listings), 1)
-        self.assertEqual(self.notifier.listings[0][0].source_listing_id, "m1")
-        self.assertEqual(first.alerted, 1)
+        self.assertEqual((alpha.status, alpha.listings, alpha.changed), ("ok", 2, 2))
+        self.assertEqual(alpha.details, "listings=2,changed=2")
+        self.assertEqual(len(self.store.get_recent_listings(10)), 2)
+        self.assertEqual(self.notifier.listings, [])
+        self.assertEqual(first.alerted, 0)
 
         second = self.run_once()
-        self.assertEqual(self.result(second, "alpha").alerted, 0)
-        self.assertEqual(len(self.notifier.listings), 1)
+        self.assertEqual(self.result(second, "alpha").changed, 0)
         self.assertEqual(self.notifier.ops, [])
 
     def test_policy_skipped_and_unselected_sources_not_in_summary(self) -> None:

@@ -4,9 +4,7 @@ import argparse
 import logging
 
 from src.config import load_settings
-from src.filtering.rules import evaluate_listing
 from src.logging_setup import configure_logging
-from src.models.listing import Listing
 from src.notify.base import LogNotifier
 from src.scrapers.factories import REGISTRY_FILE, SOURCE_FACTORIES
 from src.scrapers.runner import run_all_sources
@@ -56,34 +54,6 @@ def print_listings(store: SQLiteStore, limit: int) -> None:
         print(" | ".join(fit(record[i], column_widths[i]) for i in range(len(record))))
 
 
-def prune_non_matching_listings(store: SQLiteStore, settings) -> tuple[int, int]:
-    rows = store.get_all_listings_for_prune()
-    delete_keys: list[str] = []
-
-    for row in rows:
-        listing = Listing(
-            source_site=row["source_site"],
-            source_listing_id=row["source_listing_id"],
-            source_url=row["source_url"],
-            title=row["title"],
-            city=row["city"],
-            rent_price=row["rent_price"],
-            living_area_m2=row["living_area_m2"],
-            rooms_total=row["rooms_total"],
-            bedrooms=row["bedrooms"],
-            available_from=row["available_from"],
-            raw_features={},
-            is_available=bool(row["is_available"]),
-            listing_status=row["listing_status"],
-        )
-        match = evaluate_listing(listing, settings)
-        if not (match.is_hard_match or match.is_close_match):
-            delete_keys.append(row["dedupe_key"])
-
-    deleted = store.delete_listings_by_keys(delete_keys)
-    return deleted, len(rows)
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run rental source scraping")
     parser.add_argument("--once", action="store_true", help="Run one scraping cycle")
@@ -104,11 +74,6 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Comma-separated source names (optional)",
     )
-    parser.add_argument(
-        "--prune-non-matches",
-        action="store_true",
-        help="Delete existing DB listings that do not match current profile",
-    )
     return parser.parse_args()
 
 
@@ -126,12 +91,6 @@ def main() -> None:
         logger.info("Printed recent listings (limit=%s)", args.limit)
         return
 
-    if args.prune_non_matches:
-        deleted, total = prune_non_matching_listings(store=store, settings=settings)
-        print(f"Prune complete. Deleted {deleted} non-matching rows out of {total} total rows.")
-        logger.info("Pruned non-matches deleted=%d total_before=%d", deleted, total)
-        return
-
     selected_sources = (
         {item.strip() for item in args.sources.split(",") if item.strip()}
         if args.sources
@@ -146,7 +105,7 @@ def main() -> None:
         notifier=LogNotifier(),
         selected_sources=selected_sources,
     )
-    logger.info("Run completed alerted=%d", summary.alerted)
+    logger.info("Run completed sources=%d", len(summary.results))
 
 
 if __name__ == "__main__":

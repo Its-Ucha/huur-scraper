@@ -153,15 +153,15 @@ class SummaryEmbedTests(unittest.TestCase):
     def test_summary_lines(self) -> None:
         summary = RunSummary(
             results=[
-                SourceResult(name="vbent", status="ok", listings=4, changed=2, alerted=1),
+                SourceResult(name="vbent", status="ok", listings=4, changed=2),
                 SourceResult(name="verra", status="blocked", details="blocked: 403"),
-            ]
+            ],
+            alerted=3,
         )
         embed = build_summary_embed(summary)
-        self.assertIn("vbent", embed.description)
-        self.assertIn("4 listings", embed.description)
+        self.assertIn("**vbent** · 4 listings · 2 changed", embed.description)
         self.assertIn("blocked: 403", embed.description)
-        self.assertEqual(embed.footer.text, "1 new alert(s)")
+        self.assertEqual(embed.footer.text, "3 new alert(s)")
 
     def test_empty_summary(self) -> None:
         self.assertEqual(build_summary_embed(RunSummary()).description, "No sources ran.")

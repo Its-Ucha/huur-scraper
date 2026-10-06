@@ -18,7 +18,6 @@ def make_settings(**overrides) -> Settings:
         min_size_m2=40,
         preferred_bedrooms=2,
         allow_close_match=True,
-        store_only_matches=True,
         allowed_cities=["Den Haag", "Delft"],
         log_level="INFO",
         log_file_path=None,
