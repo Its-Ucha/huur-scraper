@@ -11,6 +11,9 @@ from src.storage.sqlite_store import SQLiteStore
 
 logger = logging.getLogger(__name__)
 
+# Set once seeding is done (or not needed), so deleting the seeded profile never re-seeds it.
+SEEDED_KEY = "profiles_seeded"
+
 
 def seed_profile_from_settings(store: SQLiteStore, settings: Settings) -> Profile | None:
     """Turn the single .env profile into the first stored profile, once.
@@ -18,7 +21,10 @@ def seed_profile_from_settings(store: SQLiteStore, settings: Settings) -> Profil
     Everything already stored was alerted under the old single-profile setup, so it
     is marked as sent to avoid posting it all again.
     """
+    if store.get_state(SEEDED_KEY) == "1":
+        return None
     if store.list_profiles():
+        store.set_state(SEEDED_KEY, "1")
         return None
     channel_id = settings.discord_alert_channel_id
     if channel_id is None or not settings.discord_mention_user_ids:
@@ -41,6 +47,7 @@ def seed_profile_from_settings(store: SQLiteStore, settings: Settings) -> Profil
         allow_close_match=settings.allow_close_match,
         municipalities=tuple(municipalities),
     )
+    store.set_state(SEEDED_KEY, "1")
     marked = store.mark_all_listings_sent(profile.id, dt.datetime.now(tz=dt.timezone.utc).isoformat())
     logger.info("Seeded profile=%s for user=%s; marked %d listings as sent", profile.id, profile.owner_user_id, marked)
     return profile

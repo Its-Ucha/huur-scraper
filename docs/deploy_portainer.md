@@ -24,7 +24,7 @@ In Discord: **User Settings → Advanced → Developer Mode** on. Then right-cli
 |---|---|
 | `DISCORD_GUILD_ID` | the server icon |
 | `DISCORD_ALERT_CHANNEL_ID` (optional) | only used on first start to seed your profile; also the ops fallback |
-| `DISCORD_OPS_CHANNEL_ID` (optional) | a channel for source errors/blocks |
+| `DISCORD_OPS_CHANNEL_ID` (recommended) | a channel for source errors/blocks and profile events; without it, ops messages go to `DISCORD_ALERT_CHANNEL_ID`, which becomes your profile's channel |
 | `DISCORD_MENTION_USER_ID` (optional) | owner of the seeded profile (first ID) |
 | `DISCORD_CONTROL_USER_IDS` | users allowed to run `/scrape`, `/pause`, `/resume` (comma-separated) |
 | `DISCORD_CONTROL_ROLE_ID` (alternative) | a role allowed to run them |

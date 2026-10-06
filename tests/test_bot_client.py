@@ -160,6 +160,18 @@ class HuurBotCycleTests(unittest.IsolatedAsyncioTestCase):
         other.set_paused(False)
         self.assertFalse(self.bot.paused)
 
+    async def test_warns_when_ops_channel_is_a_profile_channel(self) -> None:
+        self.store.create_profile(
+            owner_user_id=42, channel_id=100, max_rent_eur=1000, min_size_m2=40,
+            preferred_bedrooms=2, allow_close_match=True, municipalities=("delft",),
+        )
+        with self.assertLogs("src.bot.client", level="WARNING") as captured:
+            self.bot.warn_if_ops_in_profile_channel(SimpleNamespace(id=100))
+        self.assertIn("DISCORD_OPS_CHANNEL_ID", "\n".join(captured.output))
+        with self.assertNoLogs("src.bot.client", level="WARNING"):
+            self.bot.warn_if_ops_in_profile_channel(SimpleNamespace(id=200))
+            self.bot.warn_if_ops_in_profile_channel(None)
+
     async def test_interval_comes_from_settings(self) -> None:
         bot = HuurBot(make_settings(discord_guild_id=1, scrape_interval_minutes=25), self.store)
         self.assertEqual(bot.scrape_loop.minutes, 25)

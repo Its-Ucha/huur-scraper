@@ -84,6 +84,7 @@ class HuurBot(discord.Client):
         ops_channel = await self._resolve_ops_channel()
         self.notifier = DiscordNotifier(asyncio.get_running_loop(), self.resolve_channel, ops_channel)
         await asyncio.to_thread(seed_profile_from_settings, self.store, self.settings)
+        self.warn_if_ops_in_profile_channel(ops_channel)
 
         self.scrape_loop.start()
         logger.info(
@@ -105,6 +106,19 @@ class HuurBot(discord.Client):
             logger.warning("Ops channel candidate %s not found or not accessible", channel_id)
         logger.warning("No ops channel available; ops messages only go to the log")
         return None
+
+    def warn_if_ops_in_profile_channel(self, ops_channel) -> None:
+        # Without DISCORD_OPS_CHANNEL_ID, ops falls back to the old alert channel, which
+        # becomes the seeded profile's channel; if that profile is deleted and the channel
+        # removed, ops messages would only reach the log.
+        if ops_channel is None:
+            return
+        if any(profile.channel_id == ops_channel.id for profile in self.store.list_profiles()):
+            logger.warning(
+                "Ops messages go to a profile's alert channel (%s); set DISCORD_OPS_CHANNEL_ID "
+                "to a separate channel",
+                ops_channel.id,
+            )
 
     async def resolve_channel(self, channel_id: int):
         channel = self.get_channel(channel_id)

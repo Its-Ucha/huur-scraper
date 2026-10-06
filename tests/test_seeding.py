@@ -38,6 +38,22 @@ class SeedingTests(unittest.TestCase):
         self.assertIsNone(seed_profile_from_settings(self.store, self.settings))
         self.assertEqual(len(self.store.list_profiles()), 1)
 
+    def test_deleting_the_seeded_profile_does_not_reseed(self) -> None:
+        with self.assertLogs("src.bot.seeding", level="WARNING"):
+            profile = seed_profile_from_settings(self.store, self.settings)
+        self.store.delete_profile(profile.id)
+        self.assertIsNone(seed_profile_from_settings(self.store, self.settings))
+        self.assertEqual(self.store.list_profiles(), [])
+
+    def test_existing_profiles_mark_seeding_done(self) -> None:
+        other = self.store.create_profile(
+            owner_user_id=7, channel_id=200, max_rent_eur=1000, min_size_m2=40,
+            preferred_bedrooms=2, allow_close_match=True, municipalities=("delft",),
+        )
+        self.assertIsNone(seed_profile_from_settings(self.store, self.settings))
+        self.store.delete_profile(other.id)
+        self.assertIsNone(seed_profile_from_settings(self.store, self.settings))
+
     def test_no_seed_without_channel_or_owner(self) -> None:
         for overrides in ({"discord_alert_channel_id": None}, {"discord_mention_user_ids": []}):
             with self.subTest(overrides=overrides):
