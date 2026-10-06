@@ -120,26 +120,46 @@ class RunnerTests(unittest.TestCase):
         self.run_once()
         self.assertEqual(self.notifier.ops[1:], ["[SOURCE_RECOVERED] beta"])
 
-    def test_error_source_notifies_once_until_recovered(self) -> None:
+    def test_error_source_notifies_on_second_failure_until_recovered(self) -> None:
         self.factories["beta"] = raising(RuntimeError("boom"))
         summary = self.run_once()
-        self.run_once()
-        self.run_once()
         beta = self.result(summary, "beta")
         self.assertEqual((beta.status, beta.details), ("error", "boom"))
+        self.assertEqual(self.notifier.ops, [])
+
+        self.run_once()
+        self.run_once()
         self.assertEqual(self.notifier.ops, ["[SOURCE_ERROR] beta - boom"])
 
         self.factories["beta"] = returning([])
         self.run_once()
         self.assertEqual(self.notifier.ops[-1], "[SOURCE_RECOVERED] beta")
 
-    def test_error_then_blocked_notifies_both(self) -> None:
+    def test_single_error_then_ok_stays_quiet(self) -> None:
+        self.factories["beta"] = raising(RuntimeError("timed out"))
+        self.run_once()
+        self.factories["beta"] = returning([])
+        self.run_once()
+        self.assertEqual(self.notifier.ops, [])
+
+    def test_error_after_block_recovers_with_one_message(self) -> None:
+        self.factories["beta"] = raising(SourceBlockedError("429"))
+        self.run_once()
+        self.factories["beta"] = raising(RuntimeError("boom"))
+        self.run_once()
+        self.factories["beta"] = returning([])
+        self.run_once()
+        self.assertEqual(len(self.notifier.ops), 2)
+        self.assertTrue(self.notifier.ops[0].startswith("[SOURCE_BLOCKED] beta"))
+        self.assertEqual(self.notifier.ops[1], "[SOURCE_RECOVERED] beta")
+
+    def test_error_then_blocked_notifies_block_immediately(self) -> None:
         self.factories["beta"] = raising(RuntimeError("boom"))
         self.run_once()
         self.factories["beta"] = raising(SourceBlockedError("429"))
         self.run_once()
-        self.assertEqual(len(self.notifier.ops), 2)
-        self.assertTrue(self.notifier.ops[1].startswith("[SOURCE_BLOCKED] beta"))
+        self.assertEqual(len(self.notifier.ops), 1)
+        self.assertTrue(self.notifier.ops[0].startswith("[SOURCE_BLOCKED] beta"))
 
     def test_first_ever_ok_run_does_not_send_recovered(self) -> None:
         self.run_once()

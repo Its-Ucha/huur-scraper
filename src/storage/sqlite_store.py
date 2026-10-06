@@ -248,6 +248,27 @@ class SQLiteStore:
                 (key, value),
             )
 
+    def get_recent_source_statuses(self, per_source: int = 2) -> dict[str, list[str]]:
+        """Return each source's last statuses, newest first."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT source_site, status
+                FROM (
+                    SELECT source_site, status, id,
+                        ROW_NUMBER() OVER (PARTITION BY source_site ORDER BY id DESC) AS rank
+                    FROM source_runs
+                )
+                WHERE rank <= ?
+                ORDER BY source_site, id DESC
+                """,
+                (per_source,),
+            ).fetchall()
+        statuses: dict[str, list[str]] = {}
+        for row in rows:
+            statuses.setdefault(row["source_site"], []).append(row["status"])
+        return statuses
+
     def get_latest_source_runs(self) -> list[sqlite3.Row]:
         with self._connect() as connection:
             return connection.execute(

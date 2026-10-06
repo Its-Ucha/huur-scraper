@@ -43,6 +43,13 @@ def _now() -> str:
     return dt.datetime.now(tz=dt.timezone.utc).isoformat()
 
 
+def _failure_was_announced(previous: str | None, before_previous: str | None) -> bool:
+    """Whether the failure streak ending in the previous run produced an ops alert."""
+    if previous == "blocked":
+        return True
+    return previous == "error" and before_previous in FAILED_STATUSES
+
+
 def run_all_sources(
     settings: Settings,
     store: SQLiteStore,
@@ -54,8 +61,9 @@ def run_all_sources(
     health_tracker = SourceHealthTracker()
     policies = load_source_policies(registry_file)
     # Ops alerts fire only when a source's status changes, so a source that stays
-    # broken does not post on every cycle.
-    previous_status = {row["source_site"]: row["status"] for row in store.get_latest_source_runs()}
+    # broken does not post on every cycle. Errors are announced on the second
+    # failed run in a row, so a one-off timeout stays quiet.
+    recent_statuses = store.get_recent_source_statuses(per_source=2)
     summary = RunSummary()
     logger.info("Loaded %d source policies from %s", len(policies), registry_file)
 
@@ -89,7 +97,9 @@ def run_all_sources(
             )
             continue
 
-        previous = previous_status.get(policy.name)
+        recent = recent_statuses.get(policy.name, [])
+        previous = recent[0] if recent else None
+        before_previous = recent[1] if len(recent) > 1 else None
         scraper = factory(settings)
         try:
             logger.info("Running source=%s", policy.name)
@@ -157,7 +167,7 @@ def run_all_sources(
                     details=details,
                 )
             )
-            if previous in FAILED_STATUSES:
+            if _failure_was_announced(previous, before_previous):
                 notifier.notify_ops(f"[SOURCE_RECOVERED] {policy.name}")
 
         except SourceBlockedError as error:
@@ -186,7 +196,7 @@ def run_all_sources(
                 details=str(error),
             )
             summary.results.append(SourceResult(name=policy.name, status="error", details=str(error)))
-            if previous != "error":
+            if previous == "error" and before_previous != "error":
                 notifier.notify_ops(f"[SOURCE_ERROR] {policy.name} - {error}")
 
     return summary
