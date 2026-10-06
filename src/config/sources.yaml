@@ -57,7 +57,7 @@ sources:
   - name: vbent
     mode: SCRAPE
     min_interval_seconds: 3600
-    max_retries: 0
+    max_retries: 2
     auto_disable_on_block: true
   - name: bpd_woningfonds
     mode: SCRAPE

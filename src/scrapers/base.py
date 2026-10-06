@@ -13,6 +13,7 @@ from src.models.listing import Listing
 
 
 _BLOCK_STATUSES = {403, 429}
+_TRANSPORT_RETRY_WAIT = 15
 logger = logging.getLogger(__name__)
 
 
@@ -65,16 +66,31 @@ class BaseScraper:
                 max_retries + 1,
             )
 
-            response = httpx.request(
-                method=normalized_method,
-                url=url,
-                headers=request_headers,
-                params=params,
-                json=json_payload,
-                data=form_data,
-                timeout=timeout,
-                follow_redirects=True,
-            )
+            try:
+                response = httpx.request(
+                    method=normalized_method,
+                    url=url,
+                    headers=request_headers,
+                    params=params,
+                    json=json_payload,
+                    data=form_data,
+                    timeout=timeout,
+                    follow_redirects=True,
+                )
+            except httpx.TransportError as exc:
+                # Timeouts and dropped connections are usually short slow spells on the site.
+                if attempt >= max_retries:
+                    raise
+                wait_seconds = _TRANSPORT_RETRY_WAIT * (attempt + 1)
+                logger.warning(
+                    "Transport error source=%s method=%s error=%s; retrying in %ss",
+                    self.source_name,
+                    normalized_method,
+                    exc,
+                    wait_seconds,
+                )
+                time.sleep(wait_seconds)
+                continue
             logger.info(
                 "Response source=%s method=%s status=%s url=%s",
                 self.source_name,
