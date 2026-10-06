@@ -1,4 +1,5 @@
 import asyncio
+import datetime as dt
 import logging
 
 import discord
@@ -8,10 +9,13 @@ from src.bot.checks import is_control_user, parse_sources
 from src.bot.client import CycleBusyError, HuurBot
 from src.bot.embeds import (
     build_listings_embed,
-    build_profile_embed,
+    build_no_profile_embed,
+    build_profiles_list_embed,
     build_status_embed,
     build_summary_embed,
 )
+from src.bot.profile_views import CreateProfileView, panel_message
+from src.notify.dispatch import recent_matches
 from src.scrapers.factories import SOURCE_FACTORIES
 
 
@@ -33,26 +37,56 @@ def register_commands(bot: HuurBot) -> None:
         )
         return False
 
-    @tree.command(name="listings", description="Show recently stored matching listings")
+    @tree.command(name="listings", description="Show current listings that match your profile")
     @app_commands.describe(limit="How many listings to show (1-25)")
     async def listings(
         interaction: discord.Interaction, limit: app_commands.Range[int, 1, 25] = 10
     ) -> None:
-        rows = await asyncio.to_thread(bot.store.get_recent_listings, limit)
-        await interaction.response.send_message(embed=build_listings_embed(rows), ephemeral=True)
+        profile = await asyncio.to_thread(bot.store.get_profile, interaction.user.id)
+        if profile is None:
+            await interaction.response.send_message(
+                "You don't have a profile yet. Run /profile to create one.", ephemeral=True
+            )
+            return
+        now = dt.datetime.now(tz=dt.timezone.utc)
+        matches = await asyncio.to_thread(
+            recent_matches, bot.store, profile, now, bot.stale_after, limit
+        )
+        embed = build_listings_embed(
+            [listing.to_record() for listing in matches],
+            empty_text="No current listings match your profile.",
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @tree.command(name="status", description="Show scheduler state and the last run per source")
     async def status(interaction: discord.Interaction) -> None:
         rows = await asyncio.to_thread(bot.store.get_latest_source_runs)
+        profiles = await asyncio.to_thread(bot.store.list_profiles)
+        active = sum(1 for profile in profiles if not profile.paused)
         next_run = bot.scrape_loop.next_iteration if bot.scrape_loop.is_running() else None
-        embed = build_status_embed(bot.paused, bot.cycle_running, next_run, bot.last_cycle_at, rows)
+        embed = build_status_embed(
+            bot.paused, bot.cycle_running, next_run, bot.last_cycle_at, rows, (active, len(profiles))
+        )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @tree.command(name="profile", description="Show the current search profile")
+    @tree.command(name="profile", description="Create or edit your search profile")
     async def profile(interaction: discord.Interaction) -> None:
-        await interaction.response.send_message(
-            embed=build_profile_embed(bot.settings), ephemeral=True
-        )
+        existing = await asyncio.to_thread(bot.store.get_profile, interaction.user.id)
+        if existing is None:
+            await interaction.response.send_message(
+                embed=build_no_profile_embed(),
+                view=CreateProfileView(bot, interaction.user.id),
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_message(ephemeral=True, **panel_message(bot, existing))
+
+    @tree.command(name="profiles", description="List everyone's search profiles")
+    async def profiles(interaction: discord.Interaction) -> None:
+        if not await ensure_control(interaction):
+            return
+        rows = await asyncio.to_thread(bot.store.list_profiles)
+        await interaction.response.send_message(embed=build_profiles_list_embed(rows), ephemeral=True)
 
     @tree.command(name="scrape", description="Run a scrape cycle now")
     @app_commands.describe(sources="Comma-separated source names (default: all)")
