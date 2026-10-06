@@ -77,11 +77,18 @@ def make_match(hard: bool = True, score: int = 95) -> MatchResult:
 
 class RecordingNotifier:
     def __init__(self) -> None:
-        self.listings: list[tuple[Listing, MatchResult]] = []
+        self.listings: list[tuple[Profile, Listing, MatchResult]] = []
         self.ops: list[str] = []
+        self.ops_mentions: list[list[int]] = []
+        # channel_id -> exception raised by notify_listing, to simulate failed sends.
+        self.fail_with: dict[int, Exception] = {}
 
-    def notify_listing(self, listing: Listing, match: MatchResult) -> None:
-        self.listings.append((listing, match))
+    def notify_listing(self, profile: Profile, listing: Listing, match: MatchResult) -> None:
+        error = self.fail_with.get(profile.channel_id)
+        if error is not None:
+            raise error
+        self.listings.append((profile, listing, match))
 
-    def notify_ops(self, text: str) -> None:
+    def notify_ops(self, text: str, mention_user_ids=()) -> None:
         self.ops.append(text)
+        self.ops_mentions.append(list(mention_user_ids))

@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 
 import discord
 
 from src.filtering.rules import MatchResult
 from src.models.listing import Listing
+from src.models.profile import Profile
+from src.notify.base import ChannelUnavailableError
 
 
 logger = logging.getLogger(__name__)
@@ -20,6 +22,8 @@ SEND_TIMEOUT_SECONDS = 30
 TITLE_LIMIT = 256
 DESCRIPTION_LIMIT = 4096
 FIELD_VALUE_LIMIT = 1024
+ALLOWED_MENTIONS = discord.AllowedMentions(users=True, roles=False, everyone=False)
+ChannelResolver = Callable[[int], Awaitable[object | None]]
 
 
 def truncate(text: str, limit: int) -> str:
@@ -108,33 +112,45 @@ class DiscordNotifier:
     def __init__(
         self,
         loop: asyncio.AbstractEventLoop,
-        alert_channel,
+        resolve_channel: ChannelResolver,
         ops_channel=None,
-        mention_user_ids: Sequence[int] = (),
     ) -> None:
         self.loop = loop
-        self.alert_channel = alert_channel
+        self.resolve_channel = resolve_channel
         self.ops_channel = ops_channel
-        self.mention_user_ids = list(mention_user_ids)
 
-    def notify_listing(self, listing: Listing, match: MatchResult) -> None:
-        content = None
-        if match.is_hard_match and self.mention_user_ids:
-            content = " ".join(f"<@{user_id}>" for user_id in self.mention_user_ids)
-        self._send(self.alert_channel, content, build_listing_embed(listing, match))
+    def notify_listing(self, profile: Profile, listing: Listing, match: MatchResult) -> None:
+        content = f"<@{profile.owner_user_id}>" if match.is_hard_match else None
+        embed = build_listing_embed(listing, match)
+        self._run(self._send_to_channel_id(profile.channel_id, content, embed))
 
-    def notify_ops(self, text: str) -> None:
-        self._send(self.ops_channel or self.alert_channel, None, build_ops_embed(text))
+    def notify_ops(self, text: str, mention_user_ids: Sequence[int] = ()) -> None:
+        if self.ops_channel is None:
+            logger.warning("[OPS] %s", text)
+            return
+        content = " ".join(f"<@{user_id}>" for user_id in mention_user_ids) or None
+        try:
+            self._run(
+                self.ops_channel.send(
+                    content=content, embed=build_ops_embed(text), allowed_mentions=ALLOWED_MENTIONS
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Discord ops send failed channel=%s", getattr(self.ops_channel, "id", "?"))
 
-    def _send(self, channel, content: str | None, embed: discord.Embed) -> None:
-        coroutine = channel.send(
-            content=content,
-            embed=embed,
-            allowed_mentions=discord.AllowedMentions(users=True, roles=False, everyone=False),
-        )
+    async def _send_to_channel_id(self, channel_id: int, content: str | None, embed: discord.Embed) -> None:
+        channel = await self.resolve_channel(channel_id)
+        if channel is None:
+            raise ChannelUnavailableError(f"channel {channel_id} not found")
+        try:
+            await channel.send(content=content, embed=embed, allowed_mentions=ALLOWED_MENTIONS)
+        except (discord.NotFound, discord.Forbidden) as error:
+            raise ChannelUnavailableError(f"channel {channel_id}: {error}") from error
+
+    def _run(self, coroutine) -> None:
         future = asyncio.run_coroutine_threadsafe(coroutine, self.loop)
         try:
             future.result(timeout=SEND_TIMEOUT_SECONDS)
-        except Exception:  # noqa: BLE001
+        except BaseException:
             future.cancel()
-            logger.exception("Discord send failed channel=%s", getattr(channel, "id", "?"))
+            raise

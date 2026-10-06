@@ -91,9 +91,8 @@ class HuurBot(discord.Client):
 
         self.notifier = DiscordNotifier(
             asyncio.get_running_loop(),
-            alert_channel,
-            ops_channel,
-            self.settings.discord_mention_user_ids,
+            self._resolve_channel,
+            ops_channel or alert_channel,
         )
         self.scrape_loop.start()
         logger.info(

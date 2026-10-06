@@ -3,11 +3,12 @@ from __future__ import annotations
 import asyncio
 import threading
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import discord
 
-from src.notify.base import LogNotifier
+from src.notify.base import ChannelUnavailableError, LogNotifier
 from src.notify.discord_notifier import (
     CLOSE_MATCH_COLOR,
     HARD_MATCH_COLOR,
@@ -15,8 +16,7 @@ from src.notify.discord_notifier import (
     build_listing_embed,
     build_ops_embed,
 )
-from tests.helpers import make_listing, make_match
-
+from tests.helpers import make_listing, make_match, make_profile
 
 class FakeChannel:
     def __init__(self, channel_id: int, error: Exception | None = None, hang: bool = False) -> None:
@@ -32,6 +32,19 @@ class FakeChannel:
             raise self.error
         self.sent.append(kwargs)
 
+
+
+def resolver(*channels: FakeChannel):
+    by_id = {channel.id: channel for channel in channels}
+
+    async def resolve(channel_id: int):
+        return by_id.get(channel_id)
+
+    return resolve
+
+
+def http_error(cls, status: int, reason: str):
+    return cls(SimpleNamespace(status=status, reason=reason), reason)
 
 def _fields(embed: discord.Embed) -> dict[str, str]:
     return {field.name: field.value for field in embed.fields}
@@ -138,73 +151,86 @@ class DiscordNotifierTests(unittest.TestCase):
         self.loop = asyncio.new_event_loop()
         self.thread = threading.Thread(target=self.loop.run_forever, daemon=True)
         self.thread.start()
+        self.profile = make_profile(owner_user_id=42, channel_id=100)
 
     def tearDown(self) -> None:
         self.loop.call_soon_threadsafe(self.loop.stop)
         self.thread.join(timeout=5)
         self.loop.close()
 
-    def test_hard_match_mentions_user(self) -> None:
-        alert = FakeChannel(1)
-        notifier = DiscordNotifier(self.loop, alert, mention_user_ids=[42])
-        notifier.notify_listing(make_listing(), make_match(hard=True))
-        self.assertEqual(len(alert.sent), 1)
-        self.assertEqual(alert.sent[0]["content"], "<@42>")
-        self.assertIsInstance(alert.sent[0]["embed"], discord.Embed)
-
-    def test_hard_match_mentions_every_user(self) -> None:
-        alert = FakeChannel(1)
-        notifier = DiscordNotifier(self.loop, alert, mention_user_ids=[42, 43])
-        notifier.notify_listing(make_listing(), make_match(hard=True))
-        self.assertEqual(alert.sent[0]["content"], "<@42> <@43>")
+    def test_hard_match_goes_to_profile_channel_and_mentions_owner(self) -> None:
+        mine, other = FakeChannel(100), FakeChannel(200)
+        notifier = DiscordNotifier(self.loop, resolver(mine, other))
+        notifier.notify_listing(self.profile, make_listing(), make_match(hard=True))
+        self.assertEqual(len(mine.sent), 1)
+        self.assertEqual(other.sent, [])
+        self.assertEqual(mine.sent[0]["content"], "<@42>")
+        self.assertIsInstance(mine.sent[0]["embed"], discord.Embed)
 
     def test_close_match_does_not_mention(self) -> None:
-        alert = FakeChannel(1)
-        notifier = DiscordNotifier(self.loop, alert, mention_user_ids=[42, 43])
-        notifier.notify_listing(make_listing(), make_match(hard=False))
-        self.assertIsNone(alert.sent[0]["content"])
+        mine = FakeChannel(100)
+        DiscordNotifier(self.loop, resolver(mine)).notify_listing(
+            self.profile, make_listing(), make_match(hard=False)
+        )
+        self.assertIsNone(mine.sent[0]["content"])
 
-    def test_hard_match_without_mention_user(self) -> None:
-        alert = FakeChannel(1)
-        DiscordNotifier(self.loop, alert).notify_listing(make_listing(), make_match(hard=True))
-        self.assertIsNone(alert.sent[0]["content"])
+    def test_missing_channel_raises_unavailable(self) -> None:
+        notifier = DiscordNotifier(self.loop, resolver())
+        with self.assertRaises(ChannelUnavailableError):
+            notifier.notify_listing(self.profile, make_listing(), make_match())
 
-    def test_ops_goes_to_ops_channel(self) -> None:
-        alert, ops = FakeChannel(1), FakeChannel(2)
-        DiscordNotifier(self.loop, alert, ops).notify_ops("[SOURCE_ERROR] x - boom")
-        self.assertEqual(alert.sent, [])
-        self.assertEqual(ops.sent[0]["embed"].description, "[SOURCE_ERROR] x - boom")
+    def test_forbidden_and_not_found_raise_unavailable(self) -> None:
+        for error in (
+            http_error(discord.Forbidden, 403, "Missing Access"),
+            http_error(discord.NotFound, 404, "Unknown Channel"),
+        ):
+            with self.subTest(error=type(error).__name__):
+                notifier = DiscordNotifier(self.loop, resolver(FakeChannel(100, error=error)))
+                with self.assertRaises(ChannelUnavailableError):
+                    notifier.notify_listing(self.profile, make_listing(), make_match())
 
-    def test_ops_falls_back_to_alert_channel(self) -> None:
-        alert = FakeChannel(1)
-        DiscordNotifier(self.loop, alert).notify_ops("hello")
-        self.assertEqual(len(alert.sent), 1)
+    def test_other_send_error_propagates(self) -> None:
+        notifier = DiscordNotifier(self.loop, resolver(FakeChannel(100, error=RuntimeError("boom"))))
+        with self.assertRaisesRegex(RuntimeError, "boom"):
+            notifier.notify_listing(self.profile, make_listing(), make_match())
 
-    def test_send_error_is_logged_not_raised_and_next_send_works(self) -> None:
-        failing = FakeChannel(1, error=RuntimeError("missing access"))
-        notifier = DiscordNotifier(self.loop, failing)
-        with self.assertLogs("src.notify.discord_notifier", level="ERROR"):
-            notifier.notify_listing(make_listing(), make_match())
-        failing.error = None
-        notifier.notify_listing(make_listing(), make_match())
-        self.assertEqual(len(failing.sent), 1)
-
-    def test_send_timeout_is_logged_not_raised(self) -> None:
-        hanging = FakeChannel(1, hang=True)
-        notifier = DiscordNotifier(self.loop, hanging)
+    def test_send_timeout_raises(self) -> None:
+        notifier = DiscordNotifier(self.loop, resolver(FakeChannel(100, hang=True)))
         with patch("src.notify.discord_notifier.SEND_TIMEOUT_SECONDS", 0.2):
-            with self.assertLogs("src.notify.discord_notifier", level="ERROR"):
-                notifier.notify_ops("slow")
+            with self.assertRaises(TimeoutError):
+                notifier.notify_listing(self.profile, make_listing(), make_match())
+
+    def test_ops_goes_to_ops_channel_with_mentions(self) -> None:
+        ops = FakeChannel(2)
+        DiscordNotifier(self.loop, resolver(), ops).notify_ops("[PROFILE_DELETED] x", [7, 8])
+        self.assertEqual(ops.sent[0]["content"], "<@7> <@8>")
+        self.assertEqual(ops.sent[0]["embed"].description, "[PROFILE_DELETED] x")
+
+    def test_ops_without_mentions_has_no_content(self) -> None:
+        ops = FakeChannel(2)
+        DiscordNotifier(self.loop, resolver(), ops).notify_ops("[SOURCE_ERROR] x - boom")
+        self.assertIsNone(ops.sent[0]["content"])
+
+    def test_ops_without_channel_only_logs(self) -> None:
+        with self.assertLogs("src.notify.discord_notifier", level="WARNING") as captured:
+            DiscordNotifier(self.loop, resolver()).notify_ops("hello")
+        self.assertIn("hello", "\n".join(captured.output))
+
+    def test_ops_send_error_is_logged_not_raised(self) -> None:
+        ops = FakeChannel(2, error=RuntimeError("missing access"))
+        with self.assertLogs("src.notify.discord_notifier", level="ERROR"):
+            DiscordNotifier(self.loop, resolver(), ops).notify_ops("hello")
 
 
 class LogNotifierTests(unittest.TestCase):
     def test_logs_listing_and_ops(self) -> None:
         notifier = LogNotifier()
         with self.assertLogs("src.notify.base", level="INFO") as captured:
-            notifier.notify_listing(make_listing(), make_match())
+            notifier.notify_listing(make_profile(owner_user_id=42), make_listing(), make_match())
             notifier.notify_ops("[SOURCE_ERROR] x")
         output = "\n".join(captured.output)
         self.assertIn("HARD_MATCH", output)
+        self.assertIn("owner=42", output)
         self.assertIn("[SOURCE_ERROR] x", output)
 
 
