@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import logging
 
 from src.config import load_settings
 from src.logging_setup import configure_logging
 from src.notify.base import LogNotifier
+from src.notify.dispatch import dispatch, stale_window
 from src.scrapers.factories import REGISTRY_FILE, SOURCE_FACTORIES
 from src.scrapers.runner import run_all_sources
 from src.storage.sqlite_store import SQLiteStore
@@ -97,15 +99,29 @@ def main() -> None:
         else None
     )
 
+    notifier = LogNotifier()
     summary = run_all_sources(
         settings=settings,
         store=store,
         source_factories=SOURCE_FACTORIES,
         registry_file=REGISTRY_FILE,
-        notifier=LogNotifier(),
+        notifier=notifier,
         selected_sources=selected_sources,
     )
-    logger.info("Run completed sources=%d", len(summary.results))
+    # Dry run: matches are logged but not recorded, so the bot still sends them.
+    result = dispatch(
+        store=store,
+        profiles=store.list_profiles(active_only=True),
+        notifier=notifier,
+        now=dt.datetime.now(tz=dt.timezone.utc),
+        stale_after=stale_window(settings.scrape_interval_minutes),
+        record=False,
+    )
+    logger.info(
+        "Run completed sources=%d matches=%d (dry run, not recorded)",
+        len(summary.results),
+        result.sent,
+    )
 
 
 if __name__ == "__main__":
