@@ -5,14 +5,15 @@ Compliance-first rental listing aggregator for Delft/The Hague area.
 ## MVP features
 - Multi-source scraping with conservative rate limits
 - Source policy modes: `SCRAPE`, `ALERT_INGEST`, `DISABLED`
+- Per-user search profiles, each with its own private Discord alert channel
 - Hard and close-match filtering
 - SQLite persistence + dedupe
-- Discord bot: alerts plus /listings, /status, /profile, /scrape, /pause, /resume
+- Discord bot: alerts plus /profile, /listings, /status, /profiles, /scrape, /pause, /resume
 - Docker image, deployed via a Portainer Git stack
 
 ## Quick start
 1. Run `./scripts/setup_local.ps1`.
-2. Copy `.env.example` to `.env` and set your matching profile (Discord values are only needed to run the bot).
+2. Copy `.env.example` to `.env` (Discord values are only needed to run the bot).
 3. Run once:
    - `./scripts/run_once.ps1`
 
@@ -24,6 +25,14 @@ Compliance-first rental listing aggregator for Delft/The Hague area.
 ## Homelab deployment (Docker + Portainer)
 The bot runs as a single container that scrapes every `SCRAPE_INTERVAL_MINUTES`
 and posts matches to Discord. See [docs/deploy_portainer.md](docs/deploy_portainer.md).
+
+## Profiles
+Each person runs `/profile` in Discord and presses **Create profile**. The bot creates a
+private `#huur-<name>` channel, and the panel sets max rent, min size, close match and
+cities (Zuid-Holland municipalities). Listings that match are posted to that channel,
+including the ones already online when the profile is created or widened. Control users
+see everyone's profiles with `/profiles`. The `.env` matching values are only the
+defaults for new profiles.
 
 Run the bot locally (needs the Discord values in `.env`):
 - `.\.venv\Scripts\python.exe -m src.bot`
@@ -38,10 +47,6 @@ Run the bot locally (needs the Discord values in `.env`):
    - `.\.venv\Scripts\python.exe -m src.main --listings --limit 100`
 - In the container: `docker exec huur-scraper python -m src.main --listings`
 
-## Clean old non-matches
-- Remove previously stored rows that no longer match your current profile:
-   - `.\.venv\Scripts\python.exe -m src.main --prune-non-matches`
-- In the container: `docker exec huur-scraper python -m src.main --prune-non-matches`
 
 ## Current MVP sources
 - `thehaguerealestate`
