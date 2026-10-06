@@ -16,6 +16,7 @@ from src.bot.checks import (
 )
 from src.bot.embeds import (
     build_listings_embed,
+    listing_marker,
     build_no_profile_embed,
     build_profile_panel_embed,
     build_profiles_list_embed,
@@ -23,6 +24,7 @@ from src.bot.embeds import (
     build_summary_embed,
 )
 from src.filtering.municipalities import Municipality, all_municipalities
+from src.models.mark import APPLIED, NOT_INTERESTED, ListingMark
 from src.scrapers.runner import RunSummary, SourceResult
 from tests.helpers import make_profile, make_settings
 
@@ -114,6 +116,22 @@ class ListingsEmbedTests(unittest.TestCase):
         description = build_listings_embed([row]).description
         self.assertIn("[Flat (new)]", description)
         self.assertEqual(description.count("n/a"), 3)
+
+    def test_title_and_markers(self) -> None:
+        rows = [listing_row(), listing_row(title="Second")]
+        embed = build_listings_embed(rows, title="Applied", markers=["✅ (offline)", ""])
+        first, second = embed.description.split("\n")
+        self.assertEqual(embed.title, "Applied")
+        self.assertTrue(first.startswith("✅ (offline) [Maria Stuartplein 130]"))
+        self.assertTrue(second.startswith("[Second]"))
+
+    def test_listing_marker(self) -> None:
+        applied = ListingMark(APPLIED, "2026-10-06T00:00:00+00:00")
+        dismissed = ListingMark(NOT_INTERESTED, "2026-10-06T00:00:00+00:00")
+        self.assertEqual(listing_marker(None, False), "")
+        self.assertEqual(listing_marker(applied, False), "✅")
+        self.assertEqual(listing_marker(dismissed, True), "🚫 (offline)")
+        self.assertEqual(listing_marker(None, True), "(offline)")
 
     def test_long_list_stays_under_limit(self) -> None:
         rows = [listing_row(title="x" * 200, source_url="https://example.com/" + "y" * 200)] * 25

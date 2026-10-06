@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.models.listing import Listing
+from src.models.mark import MARK_STATES, ListingMark
 from src.models.profile import Profile
 
 
@@ -124,6 +125,17 @@ class SQLiteStore:
                     dedupe_key TEXT NOT NULL,
                     sent_at TEXT NOT NULL,
                     PRIMARY KEY (profile_id, dedupe_key)
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS listing_marks (
+                    profile_id INTEGER NOT NULL,
+                    listing_ref TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    marked_at TEXT NOT NULL,
+                    PRIMARY KEY (profile_id, listing_ref)
                 )
                 """
             )
@@ -420,6 +432,7 @@ class SQLiteStore:
     def delete_profile(self, profile_id: int) -> None:
         with self._connect() as connection:
             connection.execute("DELETE FROM profile_alerts WHERE profile_id = ?", (profile_id,))
+            connection.execute("DELETE FROM listing_marks WHERE profile_id = ?", (profile_id,))
             connection.execute("DELETE FROM profiles WHERE id = ?", (profile_id,))
 
     def get_alerted_keys(self, profile_id: int) -> set[str]:
@@ -458,3 +471,67 @@ class SQLiteStore:
                 (seen_since,),
             ).fetchall()
         return [(row["dedupe_key"], self._row_to_listing(row)) for row in rows]
+
+    def set_mark(self, profile_id: int, listing_ref: str, state: str, marked_at: str) -> None:
+        if state not in MARK_STATES:
+            raise ValueError(f"unknown mark state {state!r}")
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO listing_marks (profile_id, listing_ref, state, marked_at) VALUES (?, ?, ?, ?)
+                ON CONFLICT (profile_id, listing_ref) DO UPDATE
+                SET state = excluded.state, marked_at = excluded.marked_at
+                """,
+                (profile_id, listing_ref, state, marked_at),
+            )
+
+    def clear_mark(self, profile_id: int, listing_ref: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM listing_marks WHERE profile_id = ? AND listing_ref = ?",
+                (profile_id, listing_ref),
+            )
+
+    def get_marks(self, profile_id: int) -> dict[str, ListingMark]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT listing_ref, state, marked_at FROM listing_marks WHERE profile_id = ?",
+                (profile_id,),
+            ).fetchall()
+        return {row["listing_ref"]: ListingMark(row["state"], row["marked_at"]) for row in rows}
+
+    def get_latest_listing(self, listing_ref: str) -> Listing | None:
+        # A price or area change adds a row under a new dedupe key; the newest one is current.
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM listings
+                WHERE source_site || ':' || source_listing_id = ?
+                ORDER BY last_seen_at DESC, rowid DESC
+                LIMIT 1
+                """,
+                (listing_ref,),
+            ).fetchone()
+        return self._row_to_listing(row) if row is not None else None
+
+    def get_marked_listings(self, profile_id: int, state: str) -> list[tuple[Listing, ListingMark]]:
+        """Newest mark first, each with the latest stored version of its listing."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT listings.*, marks.listing_ref AS mark_ref, marks.marked_at AS mark_marked_at
+                FROM listing_marks AS marks
+                JOIN listings ON listings.source_site || ':' || listings.source_listing_id = marks.listing_ref
+                WHERE marks.profile_id = ? AND marks.state = ?
+                ORDER BY marks.marked_at DESC, marks.listing_ref, listings.last_seen_at DESC, listings.rowid DESC
+                """,
+                (profile_id, state),
+            ).fetchall()
+        result = []
+        seen: set[str] = set()
+        for row in rows:
+            if row["mark_ref"] in seen:
+                continue
+            seen.add(row["mark_ref"])
+            result.append((self._row_to_listing(row), ListingMark(state, row["mark_marked_at"])))
+        return result

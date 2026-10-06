@@ -9,9 +9,12 @@ from unittest.mock import patch
 import discord
 
 from src.notify.base import ChannelUnavailableError, LogNotifier
+from src.models.mark import APPLIED, NOT_INTERESTED, ListingMark
 from src.notify.discord_notifier import (
+    APPLIED_COLOR,
     CLOSE_MATCH_COLOR,
     HARD_MATCH_COLOR,
+    NOT_INTERESTED_COLOR,
     DiscordNotifier,
     build_listing_embed,
     build_ops_embed,
@@ -141,6 +144,25 @@ class ListingEmbedTests(unittest.TestCase):
         self.assertEqual(embed.title, "(untitled)")
         self.assertIsNone(embed.url)
 
+    def test_applied_mark_restyles_full_embed(self) -> None:
+        mark = ListingMark(APPLIED, "2026-10-06T12:00:00+00:00")
+        embed = build_listing_embed(make_listing(), make_match(hard=True), mark)
+        self.assertEqual(embed.color, APPLIED_COLOR)
+        self.assertEqual(embed.description, "✅ You applied on 6 Oct 2026")
+        self.assertEqual(embed.footer.text, "Hard match · Applied")
+        self.assertEqual(_fields(embed)["Price"], "€900")
+
+    def test_not_interested_mark_collapses_embed(self) -> None:
+        mark = ListingMark(NOT_INTERESTED, "2026-10-06T12:00:00+00:00")
+        embed = build_listing_embed(make_listing(), make_match(), mark)
+        self.assertEqual(embed.color, NOT_INTERESTED_COLOR)
+        self.assertEqual(embed.title, "Teststraat 1")
+        self.assertEqual(embed.url, "https://example.com/listing/1")
+        self.assertEqual(embed.description, "€900 · 50 m² · Delft · alpha")
+        self.assertEqual(embed.fields, [])
+        self.assertIsNone(embed.thumbnail.url)
+        self.assertEqual(embed.footer.text, "Not interested · 6 Oct 2026")
+
     def test_ops_embed_truncates_description(self) -> None:
         embed = build_ops_embed("e" * 5000)
         self.assertLessEqual(len(embed.description), 4096)
@@ -166,6 +188,26 @@ class DiscordNotifierTests(unittest.TestCase):
         self.assertEqual(other.sent, [])
         self.assertEqual(mine.sent[0]["content"], "<@42>")
         self.assertIsInstance(mine.sent[0]["embed"], discord.Embed)
+
+    def test_view_factory_gets_listing_and_mark(self) -> None:
+        mine = FakeChannel(100)
+        calls = []
+
+        def view_factory(listing, mark):
+            calls.append((listing.ref(), mark))
+            return "view"
+
+        mark = ListingMark(APPLIED, "2026-10-06T12:00:00+00:00")
+        notifier = DiscordNotifier(self.loop, resolver(mine), view_factory=view_factory)
+        notifier.notify_listing(self.profile, make_listing(), make_match(), mark)
+        self.assertEqual(calls, [("alpha:1", mark)])
+        self.assertEqual(mine.sent[0]["view"], "view")
+        self.assertEqual(mine.sent[0]["embed"].color, APPLIED_COLOR)
+
+    def test_without_view_factory_sends_no_view(self) -> None:
+        mine = FakeChannel(100)
+        DiscordNotifier(self.loop, resolver(mine)).notify_listing(self.profile, make_listing(), make_match())
+        self.assertIsNone(mine.sent[0]["view"])
 
     def test_close_match_does_not_mention(self) -> None:
         mine = FakeChannel(100)

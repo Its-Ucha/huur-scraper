@@ -81,7 +81,7 @@ Copy the token.
 | Command | Who | What |
 |---|---|---|
 | `/profile` | everyone | create or edit your own search profile (panel with buttons) |
-| `/listings [limit]` | everyone | current listings matching your profile |
+| `/listings [limit] [status]` | everyone | listings matching your profile; `status` = new (default, not marked yet), applied, not interested, or all |
 | `/status` | everyone | paused/running, next run, last result per source |
 | `/profiles` | control | everyone's profiles |
 | `/scrape [sources]` | control | run a cycle now (also while paused) |

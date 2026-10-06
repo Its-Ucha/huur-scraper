@@ -8,14 +8,17 @@ from discord import app_commands
 from src.bot.checks import is_control_user, parse_sources
 from src.bot.client import CycleBusyError, HuurBot
 from src.bot.embeds import (
+    LISTINGS_EMPTY_TEXTS,
+    LISTINGS_TITLES,
     build_listings_embed,
+    listing_marker,
     build_no_profile_embed,
     build_profiles_list_embed,
     build_status_embed,
     build_summary_embed,
 )
 from src.bot.profile_views import CreateProfileView, panel_message
-from src.notify.dispatch import recent_matches
+from src.notify.dispatch import is_current, recent_matches
 from src.scrapers.factories import SOURCE_FACTORIES
 
 
@@ -37,10 +40,23 @@ def register_commands(bot: HuurBot) -> None:
         )
         return False
 
-    @tree.command(name="listings", description="Show current listings that match your profile")
-    @app_commands.describe(limit="How many listings to show (1-25)")
+    @tree.command(name="listings", description="Show listings that match your profile")
+    @app_commands.describe(
+        limit="How many listings to show (1-25)",
+        status="Which listings to show (default: new ones you haven't marked)",
+    )
+    @app_commands.choices(
+        status=[
+            app_commands.Choice(name="New (not marked yet)", value="new"),
+            app_commands.Choice(name="Applied", value="applied"),
+            app_commands.Choice(name="Not interested", value="not_interested"),
+            app_commands.Choice(name="All current matches", value="all"),
+        ]
+    )
     async def listings(
-        interaction: discord.Interaction, limit: app_commands.Range[int, 1, 25] = 10
+        interaction: discord.Interaction,
+        limit: app_commands.Range[int, 1, 25] = 10,
+        status: str = "new",
     ) -> None:
         await interaction.response.defer(ephemeral=True, thinking=True)
         profile = await asyncio.to_thread(bot.store.get_profile, interaction.user.id)
@@ -50,12 +66,17 @@ def register_commands(bot: HuurBot) -> None:
             )
             return
         now = dt.datetime.now(tz=dt.timezone.utc)
-        matches = await asyncio.to_thread(
-            recent_matches, bot.store, profile, now, bot.stale_after, limit
+        entries = await asyncio.to_thread(
+            recent_matches, bot.store, profile, now, bot.stale_after, limit, status
         )
         embed = build_listings_embed(
-            [listing.to_record() for listing in matches],
-            empty_text="No current listings match your profile.",
+            [listing.to_record() for listing, _ in entries],
+            empty_text=LISTINGS_EMPTY_TEXTS[status],
+            title=LISTINGS_TITLES[status],
+            markers=[
+                listing_marker(mark, not is_current(listing, now, bot.stale_after))
+                for listing, mark in entries
+            ],
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
 

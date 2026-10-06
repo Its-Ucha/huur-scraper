@@ -29,6 +29,10 @@ class Listing:
         city = (self.city or "na").lower().strip()
         return f"{self.source_site}:{self.source_listing_id}:{city}:{price}:{area}"
 
+    def ref(self) -> str:
+        # Unlike dedupe_key this stays the same when the price or area changes.
+        return f"{self.source_site}:{self.source_listing_id}"
+
     def stamp_seen(self) -> None:
         now = dt.datetime.now(tz=dt.timezone.utc).isoformat()
         if not self.first_seen_at:

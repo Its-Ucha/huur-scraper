@@ -6,6 +6,7 @@ from typing import Protocol
 
 from src.filtering.rules import MatchResult
 from src.models.listing import Listing
+from src.models.mark import ListingMark
 from src.models.profile import Profile
 
 
@@ -17,8 +18,10 @@ class ChannelUnavailableError(Exception):
 
 
 class Notifier(Protocol):
-    def notify_listing(self, profile: Profile, listing: Listing, match: MatchResult) -> None:
-        """Send one listing alert. Raises when the send fails, so the caller can retry later."""
+    def notify_listing(
+        self, profile: Profile, listing: Listing, match: MatchResult, mark: ListingMark | None = None
+    ) -> None:
+        """Send one listing alert, shown as already applied when mark says so. Raises when the send fails, so the caller can retry later."""
 
     def notify_ops(self, text: str, mention_user_ids: Sequence[int] = ()) -> None:
         """Send an ops message. Never raises."""
@@ -27,7 +30,9 @@ class Notifier(Protocol):
 class LogNotifier:
     """Notifier for CLI runs: writes alerts to the log instead of sending them."""
 
-    def notify_listing(self, profile: Profile, listing: Listing, match: MatchResult) -> None:
+    def notify_listing(
+        self, profile: Profile, listing: Listing, match: MatchResult, mark: ListingMark | None = None
+    ) -> None:
         match_type = "HARD_MATCH" if match.is_hard_match else "CLOSE_MATCH"
         logger.info(
             "[%s] owner=%s | %s | %s | price=%s area=%s city=%s | %s",

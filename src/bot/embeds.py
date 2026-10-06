@@ -6,6 +6,7 @@ from collections.abc import Iterable, Mapping, Sequence
 import discord
 
 from src.filtering.municipalities import get_municipality
+from src.models.mark import APPLIED, NOT_INTERESTED, ListingMark
 from src.models.profile import Profile
 from src.notify.discord_notifier import DESCRIPTION_LIMIT, truncate
 from src.scrapers.runner import RunSummary
@@ -15,6 +16,19 @@ FIELD_LIMIT = 1024
 # Leave headroom below the 4096 limit for the trailing newline handling.
 LIST_BUDGET = 4000
 STATUS_ICONS = {"ok": "✅", "blocked": "⛔", "error": "❌", "skipped": "⏭️"}
+MARK_ICONS = {APPLIED: "✅", NOT_INTERESTED: "🚫"}
+LISTINGS_TITLES = {
+    "new": "New matches",
+    APPLIED: "Applied",
+    NOT_INTERESTED: "Not interested",
+    "all": "Current matches",
+}
+LISTINGS_EMPTY_TEXTS = {
+    "new": "No new listings match your profile.",
+    APPLIED: "You haven't marked any listing as applied yet.",
+    NOT_INTERESTED: "You haven't marked any listing as not interested.",
+    "all": "No current listings match your profile.",
+}
 
 
 def _money(value) -> str:
@@ -40,17 +54,31 @@ def _fit_lines(lines: list[str], budget: int) -> tuple[str, int]:
     return text.rstrip("\n"), shown
 
 
-def build_listings_embed(rows: Sequence[Mapping], empty_text: str = "No listings stored yet.") -> discord.Embed:
-    embed = discord.Embed(title="Recent matches", color=discord.Color.blurple())
+def listing_marker(mark: ListingMark | None, offline: bool) -> str:
+    parts = [MARK_ICONS[mark.state]] if mark is not None else []
+    if offline:
+        parts.append("(offline)")
+    return " ".join(parts)
+
+
+def build_listings_embed(
+    rows: Sequence[Mapping],
+    empty_text: str = "No listings stored yet.",
+    title: str = "Recent matches",
+    markers: Sequence[str] = (),
+) -> discord.Embed:
+    embed = discord.Embed(title=title, color=discord.Color.blurple())
     if not rows:
         embed.description = empty_text
         return embed
 
     lines = []
-    for row in rows:
+    for index, row in enumerate(rows):
         title = truncate(row["title"] or "(untitled)", 80).replace("[", "(").replace("]", ")")
+        marker = markers[index] if index < len(markers) else ""
         lines.append(
-            f"[{title}]({row['source_url']}) · {_money(row['rent_price'])} · "
+            (f"{marker} " if marker else "")
+            + f"[{title}]({row['source_url']}) · {_money(row['rent_price'])} · "
             f"{_area(row['living_area_m2'])} · {row['city'] or 'n/a'} · {row['source_site']}"
         )
     embed.description, shown = _fit_lines(lines, LIST_BUDGET)

@@ -6,8 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from src.models.mark import APPLIED, NOT_INTERESTED, ListingMark
 from src.notify.base import ChannelUnavailableError
-from src.notify.dispatch import dispatch, recent_matches, stale_window
+from src.notify.dispatch import dispatch, is_current, recent_matches, stale_window
 from src.storage.sqlite_store import SQLiteStore
 from tests.helpers import RecordingNotifier, make_listing
 
@@ -132,10 +133,57 @@ class DispatchTests(unittest.TestCase):
                     (f"2026-10-0{index + 1}T00:00:00+00:00", listing_id),
                 )
         connection.close()
-        listings = recent_matches(
-            self.store, self.delft, dt.datetime.now(tz=dt.timezone.utc), stale_window(10), limit=2
+        entries = self.recent(limit=2)
+        self.assertEqual([listing.source_listing_id for listing, _ in entries], ["c", "b"])
+
+    def recent(self, status="new", limit=10):
+        return recent_matches(
+            self.store, self.delft, dt.datetime.now(tz=dt.timezone.utc), stale_window(10), limit, status
         )
-        self.assertEqual([listing.source_listing_id for listing in listings], ["c", "b"])
+
+    def test_not_interested_is_never_sent_but_recorded(self) -> None:
+        self.store.upsert_listing(make_listing(source_listing_id="a", rent_price=950))
+        self.store.set_mark(self.delft.id, "alpha:a", NOT_INTERESTED, "2026-10-06T00:00:00+00:00")
+        self.assertEqual(self.run_dispatch().sent, 0)
+        self.store.upsert_listing(make_listing(source_listing_id="a", rent_price=900))
+        self.assertEqual(self.run_dispatch().sent, 0)
+        self.assertEqual(self.sent_ids(), [])
+        self.assertEqual(len(self.store.get_alerted_keys(self.delft.id)), 2)
+
+    def test_applied_listing_change_is_sent_with_mark(self) -> None:
+        self.store.upsert_listing(make_listing(source_listing_id="a", rent_price=950))
+        self.run_dispatch()
+        self.store.set_mark(self.delft.id, "alpha:a", APPLIED, "2026-10-06T00:00:00+00:00")
+        self.store.upsert_listing(make_listing(source_listing_id="a", rent_price=900))
+        self.assertEqual(self.run_dispatch().sent, 1)
+        self.assertEqual(self.notifier.marks, [None, ListingMark(APPLIED, "2026-10-06T00:00:00+00:00")])
+
+    def test_recent_matches_filter_by_status(self) -> None:
+        for listing_id in ("new", "applied", "nope"):
+            self.store.upsert_listing(make_listing(source_listing_id=listing_id))
+        self.store.upsert_listing(make_listing(source_listing_id="offline", is_available=False))
+        self.store.set_mark(self.delft.id, "alpha:applied", APPLIED, "2026-10-06T00:00:00+00:00")
+        self.store.set_mark(self.delft.id, "alpha:offline", APPLIED, "2026-10-05T00:00:00+00:00")
+        self.store.set_mark(self.delft.id, "alpha:nope", NOT_INTERESTED, "2026-10-06T00:00:00+00:00")
+
+        def ids(status):
+            return sorted(listing.source_listing_id for listing, _ in self.recent(status))
+
+        self.assertEqual(ids("new"), ["new"])
+        self.assertEqual(ids("all"), ["applied", "new", "nope"])
+        self.assertEqual(ids(APPLIED), ["applied", "offline"])
+        self.assertEqual(ids(NOT_INTERESTED), ["nope"])
+        marks = {listing.source_listing_id: mark for listing, mark in self.recent("all")}
+        self.assertIsNone(marks["new"])
+        self.assertEqual(marks["applied"].state, APPLIED)
+
+    def test_is_current(self) -> None:
+        now = dt.datetime.now(tz=dt.timezone.utc)
+        window = stale_window(10)
+        self.assertTrue(is_current(make_listing(last_seen_at=now.isoformat()), now, window))
+        self.assertFalse(is_current(make_listing(last_seen_at="2020-01-01T00:00:00+00:00"), now, window))
+        gone = make_listing(last_seen_at=now.isoformat(), is_available=False)
+        self.assertFalse(is_current(gone, now, window))
 
 
 if __name__ == "__main__":

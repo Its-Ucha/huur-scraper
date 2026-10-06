@@ -9,6 +9,7 @@ import discord
 
 from src.filtering.rules import MatchResult
 from src.models.listing import Listing
+from src.models.mark import APPLIED, NOT_INTERESTED, ListingMark
 from src.models.profile import Profile
 from src.notify.base import ChannelUnavailableError
 
@@ -17,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 HARD_MATCH_COLOR = discord.Color.green()
 CLOSE_MATCH_COLOR = discord.Color.gold()
+APPLIED_COLOR = discord.Color.blurple()
+NOT_INTERESTED_COLOR = discord.Color.dark_grey()
 OPS_COLOR = discord.Color.red()
 SEND_TIMEOUT_SECONDS = 30
 TITLE_LIMIT = 256
@@ -24,6 +27,8 @@ DESCRIPTION_LIMIT = 4096
 FIELD_VALUE_LIMIT = 1024
 ALLOWED_MENTIONS = discord.AllowedMentions(users=True, roles=False, everyone=False)
 ChannelResolver = Callable[[int], Awaitable[object | None]]
+# Builds the action buttons for an alert; must run on the event loop.
+ViewFactory = Callable[[Listing, ListingMark | None], discord.ui.View | None]
 
 
 def truncate(text: str, limit: int) -> str:
@@ -56,7 +61,37 @@ def _format_address(features: dict[str, str]) -> str:
     return truncate(address, FIELD_VALUE_LIMIT)
 
 
-def build_listing_embed(listing: Listing, match: MatchResult) -> discord.Embed:
+def _format_marked_at(value: str) -> str:
+    try:
+        date = dt.datetime.fromisoformat(value)
+    except ValueError:
+        return value
+    return f"{date.day} {date:%b %Y}"
+
+
+def _short_summary(listing: Listing) -> str:
+    price = f"€{listing.rent_price}" if listing.rent_price is not None else "n/a"
+    area = f"{listing.living_area_m2} m²" if listing.living_area_m2 is not None else "n/a"
+    return f"{price} · {area} · {_or_na(listing.city)} · {_or_na(listing.source_site)}"
+
+
+def build_not_interested_embed(listing: Listing, mark: ListingMark) -> discord.Embed:
+    url = listing.source_url if _is_http_url(listing.source_url) else None
+    embed = discord.Embed(
+        title=truncate(listing.title or "(untitled)", TITLE_LIMIT),
+        url=url,
+        description=truncate(_short_summary(listing), DESCRIPTION_LIMIT),
+        color=NOT_INTERESTED_COLOR,
+    )
+    embed.set_footer(text=f"Not interested · {_format_marked_at(mark.marked_at)}")
+    return embed
+
+
+def build_listing_embed(
+    listing: Listing, match: MatchResult, mark: ListingMark | None = None
+) -> discord.Embed:
+    if mark is not None and mark.state == NOT_INTERESTED:
+        return build_not_interested_embed(listing, mark)
     label = "Hard match" if match.is_hard_match else "Close match"
     url = listing.source_url if _is_http_url(listing.source_url) else None
     embed = discord.Embed(
@@ -95,6 +130,10 @@ def build_listing_embed(listing: Listing, match: MatchResult) -> discord.Embed:
     if _is_http_url(image_url):
         embed.set_thumbnail(url=image_url)
     embed.set_footer(text=label)
+    if mark is not None and mark.state == APPLIED:
+        embed.color = APPLIED_COLOR
+        embed.description = f"✅ You applied on {_format_marked_at(mark.marked_at)}"
+        embed.set_footer(text=f"{label} · Applied")
     return embed
 
 
@@ -114,15 +153,19 @@ class DiscordNotifier:
         loop: asyncio.AbstractEventLoop,
         resolve_channel: ChannelResolver,
         ops_channel=None,
+        view_factory: ViewFactory | None = None,
     ) -> None:
         self.loop = loop
         self.resolve_channel = resolve_channel
         self.ops_channel = ops_channel
+        self.view_factory = view_factory
 
-    def notify_listing(self, profile: Profile, listing: Listing, match: MatchResult) -> None:
+    def notify_listing(
+        self, profile: Profile, listing: Listing, match: MatchResult, mark: ListingMark | None = None
+    ) -> None:
         content = f"<@{profile.owner_user_id}>" if match.is_hard_match else None
-        embed = build_listing_embed(listing, match)
-        self._run(self._send_to_channel_id(profile.channel_id, content, embed))
+        embed = build_listing_embed(listing, match, mark)
+        self._run(self._send_listing(profile.channel_id, content, embed, listing, mark))
 
     def notify_ops(self, text: str, mention_user_ids: Sequence[int] = ()) -> None:
         if self.ops_channel is None:
@@ -138,12 +181,20 @@ class DiscordNotifier:
         except Exception:  # noqa: BLE001
             logger.exception("Discord ops send failed channel=%s", getattr(self.ops_channel, "id", "?"))
 
-    async def _send_to_channel_id(self, channel_id: int, content: str | None, embed: discord.Embed) -> None:
+    async def _send_listing(
+        self,
+        channel_id: int,
+        content: str | None,
+        embed: discord.Embed,
+        listing: Listing,
+        mark: ListingMark | None,
+    ) -> None:
         channel = await self.resolve_channel(channel_id)
         if channel is None:
             raise ChannelUnavailableError(f"channel {channel_id} not found")
+        view = self.view_factory(listing, mark) if self.view_factory is not None else None
         try:
-            await channel.send(content=content, embed=embed, allowed_mentions=ALLOWED_MENTIONS)
+            await channel.send(content=content, embed=embed, view=view, allowed_mentions=ALLOWED_MENTIONS)
         except (discord.NotFound, discord.Forbidden) as error:
             raise ChannelUnavailableError(f"channel {channel_id}: {error}") from error
 

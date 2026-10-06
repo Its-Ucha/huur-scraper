@@ -8,6 +8,7 @@ import discord
 from discord.ext import tasks
 
 from src.bot.checks import last_scheduled_clear
+from src.bot.listing_actions import ListingActionButton, build_listing_view
 from src.bot.seeding import seed_profile_from_settings
 from src.config import Settings
 from src.notify.base import Notifier
@@ -69,6 +70,7 @@ class HuurBot(discord.Client):
         from src.bot.commands import register_commands
 
         register_commands(self)
+        self.add_dynamic_items(ListingActionButton)
         guild = discord.Object(id=self.settings.discord_guild_id)
         self.tree.copy_global_to(guild=guild)
         synced = await self.tree.sync(guild=guild)
@@ -82,7 +84,9 @@ class HuurBot(discord.Client):
         logger.info("Logged in as %s", self.user)
 
         ops_channel = await self._resolve_ops_channel()
-        self.notifier = DiscordNotifier(asyncio.get_running_loop(), self.resolve_channel, ops_channel)
+        self.notifier = DiscordNotifier(
+            asyncio.get_running_loop(), self.resolve_channel, ops_channel, view_factory=build_listing_view
+        )
         await asyncio.to_thread(seed_profile_from_settings, self.store, self.settings)
         self.warn_if_ops_in_profile_channel(ops_channel)
 

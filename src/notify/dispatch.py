@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 from src.filtering.rules import MatchResult, evaluate_listing
 from src.models.listing import Listing
+from src.models.mark import MARK_STATES, NOT_INTERESTED, ListingMark
 from src.models.profile import Profile
 from src.notify.base import ChannelUnavailableError, Notifier
 from src.storage.sqlite_store import SQLiteStore
@@ -25,6 +26,12 @@ class DispatchSummary:
 def stale_window(interval_minutes: int) -> dt.timedelta:
     # Long enough that one failed scrape doesn't drop a source's listings.
     return dt.timedelta(minutes=3 * interval_minutes)
+
+
+def is_current(listing: Listing, now: dt.datetime, stale_after: dt.timedelta) -> bool:
+    if not listing.is_available or not listing.last_seen_at:
+        return False
+    return dt.datetime.fromisoformat(listing.last_seen_at) >= now - stale_after
 
 
 def find_matches(
@@ -58,11 +65,17 @@ def dispatch(
 
     for profile in active:
         already_sent = store.get_alerted_keys(profile.id) if record else set()
+        marks = store.get_marks(profile.id)
         for key, listing, match in find_matches(candidates, profile):
             if key in already_sent:
                 continue
+            mark = marks.get(listing.ref())
+            if mark is not None and mark.state == NOT_INTERESTED:
+                if record:
+                    store.record_alert(profile.id, key, now.isoformat())
+                continue
             try:
-                notifier.notify_listing(profile, listing, match)
+                notifier.notify_listing(profile, listing, match, mark)
             except ChannelUnavailableError as error:
                 logger.warning("Profile=%s channel unavailable: %s", profile.id, error)
                 if record:
@@ -97,7 +110,14 @@ def recent_matches(
     now: dt.datetime,
     stale_after: dt.timedelta,
     limit: int,
-) -> list[Listing]:
+    status: str = "new",
+) -> list[tuple[Listing, ListingMark | None]]:
+    if status in MARK_STATES:
+        # Marked listings are shown even after they went offline or stopped matching.
+        return store.get_marked_listings(profile.id, status)[:limit]
+    marks = store.get_marks(profile.id)
     candidates = store.get_dispatch_candidates(seen_since=(now - stale_after).isoformat())
-    matches = [listing for _, listing, _ in find_matches(candidates, profile)]
-    return list(reversed(matches))[:limit]
+    entries = [(listing, marks.get(listing.ref())) for _, listing, _ in find_matches(candidates, profile)]
+    if status == "new":
+        entries = [(listing, mark) for listing, mark in entries if mark is None]
+    return list(reversed(entries))[:limit]

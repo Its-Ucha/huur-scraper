@@ -5,6 +5,7 @@ from pathlib import Path
 from src.config import Settings
 from src.filtering.rules import MatchResult
 from src.models.listing import Listing
+from src.models.mark import ListingMark
 from src.models.profile import Profile
 
 
@@ -79,16 +80,20 @@ def make_match(hard: bool = True, score: int = 95) -> MatchResult:
 class RecordingNotifier:
     def __init__(self) -> None:
         self.listings: list[tuple[Profile, Listing, MatchResult]] = []
+        self.marks: list[ListingMark | None] = []
         self.ops: list[str] = []
         self.ops_mentions: list[list[int]] = []
         # channel_id -> exception raised by notify_listing, to simulate failed sends.
         self.fail_with: dict[int, Exception] = {}
 
-    def notify_listing(self, profile: Profile, listing: Listing, match: MatchResult) -> None:
+    def notify_listing(
+        self, profile: Profile, listing: Listing, match: MatchResult, mark: ListingMark | None = None
+    ) -> None:
         error = self.fail_with.get(profile.channel_id)
         if error is not None:
             raise error
         self.listings.append((profile, listing, match))
+        self.marks.append(mark)
 
     def notify_ops(self, text: str, mention_user_ids=()) -> None:
         self.ops.append(text)

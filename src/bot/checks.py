@@ -103,3 +103,8 @@ def city_select_pages(
         raise ValueError(f"{len(ordered)} municipalities need more than {MAX_CITY_PAGES} select menus")
     per_page = math.ceil(len(ordered) / page_count)
     return [ordered[index:index + per_page] for index in range(0, len(ordered), per_page)]
+
+
+def owns_alert_channel(profile, channel_id: int | None) -> bool:
+    """Alert buttons work only for the owner of the profile whose channel the alert is in."""
+    return profile is not None and channel_id is not None and profile.channel_id == channel_id
