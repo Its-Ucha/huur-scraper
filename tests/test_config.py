@@ -52,6 +52,10 @@ class DiscordSettingsTests(unittest.TestCase):
         self.assertEqual(settings.discord_control_role_id, 333)
         self.assertEqual(settings.scrape_interval_minutes, 15)
 
+    def test_category_name_default_and_override(self) -> None:
+        self.assertEqual(_load({}).huur_category_name, "Huur")
+        self.assertEqual(_load({"HUUR_CATEGORY_NAME": " Woningen "}).huur_category_name, "Woningen")
+
     def test_non_numeric_id_names_the_variable(self) -> None:
         with self.assertRaisesRegex(ValueError, "DISCORD_GUILD_ID"):
             _load({"DISCORD_GUILD_ID": "my-server"})

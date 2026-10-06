@@ -32,6 +32,7 @@ def make_settings(**overrides) -> Settings:
         scrape_interval_minutes=10,
         listings_clear_weekday=None,
         listings_clear_hour_utc=4,
+        huur_category_name="Huur",
     )
     values.update(overrides)
     return Settings(**values)

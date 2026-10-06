@@ -19,8 +19,6 @@ def validate_bot_settings(settings: Settings) -> list[str]:
         errors.append("DISCORD_BOT_TOKEN is not set")
     if settings.discord_guild_id is None:
         errors.append("DISCORD_GUILD_ID is not set")
-    if settings.discord_alert_channel_id is None:
-        errors.append("DISCORD_ALERT_CHANNEL_ID is not set")
     if not settings.discord_control_user_ids and settings.discord_control_role_id is None:
         errors.append(
             "Neither DISCORD_CONTROL_USER_IDS nor DISCORD_CONTROL_ROLE_ID is set; "

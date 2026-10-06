@@ -58,14 +58,14 @@ class ValidateSettingsTests(unittest.TestCase):
     def test_all_missing_reports_each(self) -> None:
         errors = validate_bot_settings(make_settings())
         joined = "\n".join(errors)
-        for name in ("DISCORD_BOT_TOKEN", "DISCORD_GUILD_ID", "DISCORD_ALERT_CHANNEL_ID", "DISCORD_CONTROL_USER_IDS"):
+        for name in ("DISCORD_BOT_TOKEN", "DISCORD_GUILD_ID", "DISCORD_CONTROL_USER_IDS"):
             self.assertIn(name, joined)
+        self.assertNotIn("DISCORD_ALERT_CHANNEL_ID", joined)
 
     def test_valid_settings(self) -> None:
         settings = make_settings(
             discord_bot_token="t",
             discord_guild_id=1,
-            discord_alert_channel_id=2,
             discord_control_role_id=3,
         )
         self.assertEqual(validate_bot_settings(settings), [])

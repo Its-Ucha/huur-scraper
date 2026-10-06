@@ -31,6 +31,7 @@ class Settings:
     scrape_interval_minutes: int
     listings_clear_weekday: int | None
     listings_clear_hour_utc: int
+    huur_category_name: str
 
 
 def _parse_bool(value: str, default: bool) -> bool:
@@ -144,4 +145,5 @@ def load_settings() -> Settings:
         scrape_interval_minutes=_parse_interval_minutes(),
         listings_clear_weekday=_parse_clear_weekday(),
         listings_clear_hour_utc=_parse_clear_hour(),
+        huur_category_name=os.getenv("HUUR_CATEGORY_NAME", "").strip() or "Huur",
     )
