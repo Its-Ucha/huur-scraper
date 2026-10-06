@@ -4,19 +4,27 @@ import datetime as dt
 import unittest
 
 from src.bot.checks import (
+    archived_channel_name,
+    city_select_pages,
     is_control_user,
     last_scheduled_clear,
     parse_sources,
+    sanitize_channel_name,
+    unique_channel_name,
     validate_bot_settings,
+    validate_profile_numbers,
 )
 from src.bot.embeds import (
     build_listings_embed,
-    build_profile_embed,
+    build_no_profile_embed,
+    build_profile_panel_embed,
+    build_profiles_list_embed,
     build_status_embed,
     build_summary_embed,
 )
+from src.filtering.municipalities import Municipality, all_municipalities
 from src.scrapers.runner import RunSummary, SourceResult
-from tests.helpers import make_settings
+from tests.helpers import make_profile, make_settings
 
 
 def listing_row(**overrides) -> dict:
@@ -87,6 +95,9 @@ class ParseSourcesTests(unittest.TestCase):
 
 
 class ListingsEmbedTests(unittest.TestCase):
+    def test_custom_empty_text(self) -> None:
+        self.assertEqual(build_listings_embed([], empty_text="Nothing").description, "Nothing")
+
     def test_empty(self) -> None:
         self.assertEqual(build_listings_embed([]).description, "No listings stored yet.")
 
@@ -112,6 +123,10 @@ class ListingsEmbedTests(unittest.TestCase):
 
 
 class StatusEmbedTests(unittest.TestCase):
+    def test_profile_counts(self) -> None:
+        fields = {f.name: f.value for f in build_status_embed(False, False, None, None, [], (2, 3)).fields}
+        self.assertEqual(fields["Profiles"], "2 active / 3 total")
+
     def test_no_runs_yet(self) -> None:
         embed = build_status_embed(False, False, None, None, [])
         fields = {f.name: f.value for f in embed.fields}
@@ -139,14 +154,84 @@ class StatusEmbedTests(unittest.TestCase):
         self.assertNotIn("listings=3", fields["Sources"])
 
 
+class ProfileNumberValidationTests(unittest.TestCase):
+    def test_valid_with_spaces_and_euro_sign(self) -> None:
+        values, errors = validate_profile_numbers(" €1100 ", "45", "2")
+        self.assertEqual(errors, [])
+        self.assertEqual(values, {"max_rent_eur": 1100, "min_size_m2": 45, "preferred_bedrooms": 2})
+
+    def test_every_problem_is_listed(self) -> None:
+        values, errors = validate_profile_numbers("abc", "600", "1.5")
+        self.assertIsNone(values)
+        self.assertEqual(len(errors), 3)
+        self.assertIn("Max rent must be a whole number", errors[0])
+        self.assertIn("Min size must be between 0 and 500", errors[1])
+        self.assertIn("Preferred bedrooms must be a whole number", errors[2])
+
+    def test_bounds(self) -> None:
+        self.assertEqual(validate_profile_numbers("100", "0", "0")[1], [])
+        self.assertEqual(validate_profile_numbers("10000", "500", "10")[1], [])
+        self.assertIn("between 100 and 10000", validate_profile_numbers("99", "40", "2")[1][0])
+
+
+class ChannelNameTests(unittest.TestCase):
+    def test_sanitize(self) -> None:
+        self.assertEqual(sanitize_channel_name("Alice"), "huur-alice")
+        self.assertEqual(sanitize_channel_name("Big Bob_99!"), "huur-big-bob-99")
+        self.assertEqual(sanitize_channel_name("✨✨"), "huur-user")
+        self.assertLessEqual(len(sanitize_channel_name("x" * 200)), 90)
+
+    def test_unique(self) -> None:
+        self.assertEqual(unique_channel_name("huur-alice", ["general"]), "huur-alice")
+        self.assertEqual(unique_channel_name("huur-alice", ["huur-alice", "huur-alice-2"]), "huur-alice-3")
+
+    def test_archived(self) -> None:
+        self.assertEqual(archived_channel_name("huur-alice"), "archived-huur-alice")
+        self.assertEqual(len(archived_channel_name("x" * 100)), 100)
+
+
+class CitySelectPagesTests(unittest.TestCase):
+    def test_real_data_splits_into_two_pages_of_25(self) -> None:
+        pages = city_select_pages(all_municipalities())
+        self.assertEqual([len(page) for page in pages], [25, 25])
+        self.assertEqual(pages[0][0].name, "Alblasserdam")
+        self.assertEqual(pages[1][-1].name, "Zwijndrecht")
+
+    def test_even_split_and_limit(self) -> None:
+        items = [Municipality(f"k{i:02}", f"N{i:02}", 52.0, 4.0, ()) for i in range(51)]
+        self.assertEqual([len(page) for page in city_select_pages(items)], [17, 17, 17])
+        self.assertEqual(city_select_pages([]), [])
+        too_many = [Municipality(f"k{i:03}", f"N{i:03}", 52.0, 4.0, ()) for i in range(101)]
+        with self.assertRaises(ValueError):
+            city_select_pages(too_many)
+
+
 class ProfileEmbedTests(unittest.TestCase):
-    def test_profile_fields(self) -> None:
-        fields = {f.name: f.value for f in build_profile_embed(make_settings()).fields}
+    def test_panel_fields(self) -> None:
+        profile = make_profile(municipalities=("leidschendam-voorburg", "delft"), channel_id=100)
+        fields = {f.name: f.value for f in build_profile_panel_embed(profile).fields}
         self.assertEqual(fields["Max rent"], "€1000")
         self.assertEqual(fields["Min size"], "40 m²")
+        self.assertEqual(fields["Bedrooms"], "2 (preferred)")
         self.assertIn("on", fields["Close match"])
-        self.assertEqual(fields["Interval"], "every 10 min")
-        self.assertEqual(fields["Cities"], "Den Haag, Delft")
+        self.assertEqual(fields["Cities"], "Delft, Leidschendam-Voorburg")
+        self.assertEqual(fields["Alerts"], "<#100> (active)")
+
+    def test_panel_without_cities_and_paused(self) -> None:
+        fields = {f.name: f.value for f in build_profile_panel_embed(make_profile(municipalities=(), paused=True)).fields}
+        self.assertIn("Press **Cities**", fields["Cities"])
+        self.assertIn("paused", fields["Alerts"])
+
+    def test_no_profile_embed(self) -> None:
+        self.assertIn("Create", build_no_profile_embed().description)
+
+    def test_profiles_list(self) -> None:
+        embed = build_profiles_list_embed(
+            [make_profile(owner_user_id=42, channel_id=100), make_profile(id=2, owner_user_id=43, channel_id=101, paused=True)]
+        )
+        self.assertIn("<@42> → <#100>", embed.description)
+        self.assertIn("paused", embed.description)
+        self.assertEqual(build_profiles_list_embed([]).description, "No profiles yet.")
 
 
 class SummaryEmbedTests(unittest.TestCase):

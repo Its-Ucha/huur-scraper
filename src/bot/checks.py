@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import datetime as dt
+import math
+import re
 from collections.abc import Iterable
 
 from src.config import Settings
+from src.filtering.municipalities import Municipality
 
 
 def is_control_user(user_id: int, role_ids: Iterable[int], settings: Settings) -> bool:
@@ -42,3 +45,61 @@ def last_scheduled_clear(now: dt.datetime, weekday: int, hour: int) -> dt.dateti
     if slot > now:
         slot -= dt.timedelta(days=7)
     return slot
+
+
+PROFILE_NUMBER_FIELDS = (
+    ("max_rent_eur", "Max rent", 100, 10000),
+    ("min_size_m2", "Min size", 0, 500),
+    ("preferred_bedrooms", "Preferred bedrooms", 0, 10),
+)
+MAX_CITY_PAGES = 4  # A view has 5 rows; one is needed for the buttons.
+
+
+def validate_profile_numbers(
+    max_rent: str, min_size: str, bedrooms: str
+) -> tuple[dict[str, int] | None, list[str]]:
+    values: dict[str, int] = {}
+    errors: list[str] = []
+    for (field, label, low, high), text in zip(PROFILE_NUMBER_FIELDS, (max_rent, min_size, bedrooms)):
+        cleaned = text.strip().lstrip("€").strip()
+        if not cleaned.isdigit():
+            errors.append(f"{label} must be a whole number, got {text.strip()!r}")
+            continue
+        number = int(cleaned)
+        if not low <= number <= high:
+            errors.append(f"{label} must be between {low} and {high}, got {number}")
+            continue
+        values[field] = number
+    return (None, errors) if errors else (values, [])
+
+
+def sanitize_channel_name(display_name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", display_name.lower()).strip("-")
+    return f"huur-{slug or 'user'}"[:90]
+
+
+def unique_channel_name(base: str, existing: Iterable[str]) -> str:
+    taken = set(existing)
+    if base not in taken:
+        return base
+    number = 2
+    while f"{base}-{number}" in taken:
+        number += 1
+    return f"{base}-{number}"
+
+
+def archived_channel_name(name: str) -> str:
+    return f"archived-{name}"[:100]
+
+
+def city_select_pages(
+    municipalities: Iterable[Municipality], page_size: int = 25
+) -> list[list[Municipality]]:
+    ordered = sorted(municipalities, key=lambda item: item.name.lower())
+    if not ordered:
+        return []
+    page_count = math.ceil(len(ordered) / page_size)
+    if page_count > MAX_CITY_PAGES:
+        raise ValueError(f"{len(ordered)} municipalities need more than {MAX_CITY_PAGES} select menus")
+    per_page = math.ceil(len(ordered) / page_count)
+    return [ordered[index:index + per_page] for index in range(0, len(ordered), per_page)]
