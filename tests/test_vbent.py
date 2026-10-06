@@ -8,7 +8,9 @@ from urllib.parse import unquote
 
 from src.config import Settings
 from src.scrapers.base import SourceBlockedError
-from src.scrapers.sites.vbent import VBentScraper
+from src.filtering.municipalities import Municipality
+from src.scrapers.scope import SearchScope
+from src.scrapers.sites.vbent import VBentScraper, vbent_area
 
 
 HOUSE = {
@@ -143,6 +145,46 @@ class VBentScraperTests(unittest.TestCase):
         for value in [None, True, {}, "bad", "NaN", float("inf"), -1]:
             with self.subTest(value=value):
                 self.assertIsNone(self.scraper._number(value))
+
+
+GRID = [
+    Municipality("a", "A", 52.0, 4.0, ("A-town",)),
+    Municipality("b", "B", 52.0, 4.2, ("B-town",)),
+    Municipality("c", "C", 52.0, 4.4, ("C-town",)),
+]
+
+
+class VBentAreaTests(unittest.TestCase):
+    def test_no_scope_keeps_today_default(self) -> None:
+        self.assertEqual(vbent_area(None), ("Delft", 15))
+        self.assertEqual(vbent_area(SearchScope()), ("Delft", 15))
+
+    def test_single_municipality_uses_minimum_radius(self) -> None:
+        self.assertEqual(vbent_area(SearchScope(frozenset({"delft"}))), ("Delft", 10))
+
+    def test_spread_picks_middle_center(self) -> None:
+        # B is ~13.7 km from A and C; +5 km margin rounds up to 19.
+        scope = SearchScope(frozenset({"a", "c"}))
+        self.assertEqual(vbent_area(scope, GRID), ("B-town", 19))
+
+    def test_radius_is_capped(self) -> None:
+        far = [
+            Municipality("w", "W", 52.0, 3.0, ("W-town",)),
+            Municipality("m", "M", 52.0, 4.0, ("M-town",)),
+            Municipality("e", "E", 52.0, 5.0, ("E-town",)),
+        ]
+        self.assertEqual(vbent_area(SearchScope(frozenset({"w", "e"})), far), ("M-town", 50))
+
+    def test_unknown_keys_fall_back_to_default(self) -> None:
+        self.assertEqual(vbent_area(SearchScope(frozenset({"atlantis"})), GRID), ("Delft", 15))
+
+    def test_search_uses_area_from_scope(self) -> None:
+        scraper = VBentScraper(Mock(spec=Settings), SearchScope(frozenset({"leiden"})))
+        with patch.object(scraper, "fetch_json", return_value={"houses": [], "pageCount": 0}) as fetch:
+            scraper.search(max_retries=0)
+        cookie = fetch.call_args.kwargs["headers"]["Cookie"]
+        filters = json.loads(unquote(cookie.split("filter_properties=", 1)[1]))
+        self.assertEqual((filters["city"], filters["radius"]), ("Leiden", 10))
 
 
 if __name__ == "__main__":

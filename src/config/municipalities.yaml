@@ -32,12 +32,12 @@ municipalities:
   - {key: molenlanden, name: Molenlanden, lat: 51.880, lon: 4.800, places: [Nieuw-Lekkerland, Groot-Ammers, Bleskensgraaf, Giessenburg, Arkel, Hoornaar, Streefkerk, Brandwijk, Goudriaan, Ottoland, Noordeloos, Kinderdijk]}
   - {key: nieuwkoop, name: Nieuwkoop, lat: 52.150, lon: 4.775, places: [Nieuwkoop, Nieuwveen, Ter Aar, Zevenhoven, Noorden, Langeraar]}
   - {key: nissewaard, name: Nissewaard, lat: 51.845, lon: 4.320, places: [Spijkenisse, Zuidland, Hekelingen, Simonshaven, Abbenbroek, Geervliet, Heenvliet]}
-  - {key: noordwijk, name: Noordwijk, lat: 52.240, lon: 4.445, places: [Noordwijk, Noordwijkerhout, De Zilk]}
+  - {key: noordwijk, name: Noordwijk, lat: 52.240, lon: 4.445, places: [Noordwijk aan Zee, Noordwijk, Noordwijk-Binnen, Noordwijkerhout, De Zilk]}
   - {key: oegstgeest, name: Oegstgeest, lat: 52.180, lon: 4.470, places: [Oegstgeest]}
   - {key: papendrecht, name: Papendrecht, lat: 51.832, lon: 4.688, places: [Papendrecht]}
   - {key: pijnacker-nootdorp, name: Pijnacker-Nootdorp, lat: 52.030, lon: 4.430, places: [Pijnacker, Nootdorp, Delfgauw]}
   - {key: ridderkerk, name: Ridderkerk, lat: 51.872, lon: 4.603, places: [Ridderkerk, Bolnes, Rijsoord]}
-  - {key: rijswijk, name: Rijswijk, lat: 52.036, lon: 4.325, places: [Rijswijk, Rijswijk ZH]}
+  - {key: rijswijk, name: Rijswijk, lat: 52.036, lon: 4.325, places: [Rijswijk (ZH), Rijswijk, Rijswijk ZH]}
   - {key: rotterdam, name: Rotterdam, lat: 51.922, lon: 4.479, places: [Rotterdam, Hoogvliet, Rozenburg, Pernis, Hoek van Holland]}
   - {key: schiedam, name: Schiedam, lat: 51.919, lon: 4.400, places: [Schiedam]}
   - {key: sliedrecht, name: Sliedrecht, lat: 51.821, lon: 4.774, places: [Sliedrecht]}
@@ -49,6 +49,6 @@ municipalities:
   - {key: wassenaar, name: Wassenaar, lat: 52.143, lon: 4.400, places: [Wassenaar]}
   - {key: westland, name: Westland, lat: 51.990, lon: 4.210, places: [Naaldwijk, Monster, "'s-Gravenzande", Wateringen, De Lier, Poeldijk, Honselersdijk, Maasdijk, Kwintsheul, Ter Heijde]}
   - {key: zoetermeer, name: Zoetermeer, lat: 52.057, lon: 4.493, places: [Zoetermeer]}
-  - {key: zoeterwoude, name: Zoeterwoude, lat: 52.120, lon: 4.495, places: [Zoeterwoude]}
+  - {key: zoeterwoude, name: Zoeterwoude, lat: 52.120, lon: 4.495, places: [Zoeterwoude-Dorp, Zoeterwoude, Zoeterwoude-Rijndijk]}
   - {key: zuidplas, name: Zuidplas, lat: 52.010, lon: 4.610, places: [Nieuwerkerk aan den IJssel, Moordrecht, Zevenhuizen, Moerkapelle]}
   - {key: zwijndrecht, name: Zwijndrecht, lat: 51.815, lon: 4.640, places: [Zwijndrecht, Heerjansdam]}

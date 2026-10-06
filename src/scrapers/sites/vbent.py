@@ -2,10 +2,46 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Sequence
 from urllib.parse import quote, urljoin
 
 from src.models.listing import Listing
+from src.filtering.municipalities import Municipality, all_municipalities
 from src.scrapers.base import BaseScraper
+from src.scrapers.scope import SearchScope
+
+
+DEFAULT_AREA = ("Delft", 15)
+AREA_MARGIN_KM = 5
+MIN_RADIUS_KM = 10
+MAX_RADIUS_KM = 50
+EARTH_RADIUS_KM = 6371.0
+
+
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+	phi1, phi2 = math.radians(lat1), math.radians(lat2)
+	d_phi = math.radians(lat2 - lat1)
+	d_lambda = math.radians(lon2 - lon1)
+	a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+	return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
+
+
+def vbent_area(
+	scope: SearchScope | None, municipalities: Sequence[Municipality] | None = None
+) -> tuple[str, int]:
+	"""Smallest Vb&t search circle, centered on a municipality, covering every selected one."""
+	pool = list(municipalities) if municipalities is not None else all_municipalities()
+	keys = scope.municipalities if scope is not None else frozenset()
+	selected = [item for item in pool if item.key in keys]
+	if not selected:
+		return DEFAULT_AREA
+	best_center, best_needed = None, math.inf
+	for center in sorted(pool, key=lambda item: item.key):
+		needed = max(haversine_km(center.lat, center.lon, item.lat, item.lon) for item in selected)
+		if needed < best_needed:
+			best_center, best_needed = center, needed
+	radius = min(max(math.ceil(best_needed + AREA_MARGIN_KM), MIN_RADIUS_KM), MAX_RADIUS_KM)
+	return best_center.main_place, radius
 
 
 class VBentScraper(BaseScraper):
@@ -28,7 +64,9 @@ class VBentScraper(BaseScraper):
 	}
 
 	def search(self, max_retries: int = 2) -> list[Listing]:
-		filters = quote(json.dumps(self.filter_template, separators=(",", ":")), safe="")
+		city, radius = vbent_area(self.scope)
+		search_filters = dict(self.filter_template, city=city, radius=radius)
+		filters = quote(json.dumps(search_filters, separators=(",", ":")), safe="")
 		headers = {
 			"Accept": "application/json",
 			"Cookie": f"language=nl; filter_properties={filters}",

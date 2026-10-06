@@ -10,6 +10,7 @@ import httpx
 
 from src.config import Settings
 from src.models.listing import Listing
+from src.scrapers.scope import SearchScope
 
 
 _BLOCK_STATUSES = {403, 429}
@@ -24,8 +25,9 @@ class SourceBlockedError(Exception):
 class BaseScraper:
     source_name: str = "base"
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, scope: SearchScope | None = None) -> None:
         self.settings = settings
+        self.scope = scope or SearchScope()
 
     def search(self) -> list[Listing]:
         raise NotImplementedError

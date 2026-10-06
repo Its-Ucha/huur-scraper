@@ -16,6 +16,8 @@ class VestedaScraper(BaseScraper):
         4: ("rented", False),
     }
 
+    # The API ignores the location fields (results are national) but honours price
+    # bounds, so none are sent: matching happens per profile after scraping.
     payload_template = {
         "filters": [6842],
         "latitude": 52.011578,
@@ -23,8 +25,6 @@ class VestedaScraper(BaseScraper):
         "place": "Delft, Nederland",
         "radius": 10,
         "sortType": 0,
-        "priceFrom": 500,
-        "priceTo": 1200,
         "pageNumber": 0,
         "pageSize": 200,
     }

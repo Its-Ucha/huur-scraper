@@ -7,6 +7,7 @@ from pathlib import Path
 
 from src.scrapers.base import SourceBlockedError
 from src.scrapers.runner import run_all_sources
+from src.scrapers.scope import SearchScope
 from src.storage.sqlite_store import SQLiteStore
 from tests.helpers import RecordingNotifier, make_listing, make_settings
 
@@ -33,7 +34,7 @@ sources:
 
 def returning(listings):
     class _Scraper:
-        def __init__(self, settings) -> None:
+        def __init__(self, settings, scope=None) -> None:
             pass
 
         def search(self, max_retries: int = 0):
@@ -44,7 +45,7 @@ def returning(listings):
 
 def raising(error: Exception):
     class _Scraper:
-        def __init__(self, settings) -> None:
+        def __init__(self, settings, scope=None) -> None:
             pass
 
         def search(self, max_retries: int = 0):
@@ -69,7 +70,7 @@ class RunnerTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def run_once(self, selected=None):
+    def run_once(self, selected=None, scope=None):
         return run_all_sources(
             settings=self.settings,
             store=self.store,
@@ -77,6 +78,7 @@ class RunnerTests(unittest.TestCase):
             registry_file=self.registry,
             notifier=self.notifier,
             selected_sources=selected,
+            scope=scope,
         )
 
     def result(self, summary, name):
@@ -94,6 +96,21 @@ class RunnerTests(unittest.TestCase):
         second = self.run_once()
         self.assertEqual(self.result(second, "alpha").changed, 0)
         self.assertEqual(self.notifier.ops, [])
+
+    def test_scope_is_passed_to_scrapers(self) -> None:
+        seen = []
+
+        class _Scraper:
+            def __init__(self, settings, scope=None) -> None:
+                seen.append(scope)
+
+            def search(self, max_retries: int = 0):
+                return []
+
+        self.factories = {"alpha": _Scraper, "beta": _Scraper}
+        scope = SearchScope(frozenset({"delft"}))
+        self.run_once(scope=scope)
+        self.assertEqual(seen, [scope, scope])
 
     def test_policy_skipped_and_unselected_sources_not_in_summary(self) -> None:
         summary = self.run_once(selected={"alpha"})

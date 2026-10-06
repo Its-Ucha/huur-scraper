@@ -10,6 +10,7 @@ from src.notify.base import Notifier
 from src.policy.risk_policy import is_collection_allowed
 from src.scrapers.base import SourceBlockedError
 from src.scrapers.registry import load_source_policies
+from src.scrapers.scope import SearchScope
 from src.scrapers.source_health import SourceHealthState, SourceHealthTracker
 from src.storage.sqlite_store import SQLiteStore
 
@@ -53,6 +54,7 @@ def run_all_sources(
     registry_file: Path,
     notifier: Notifier,
     selected_sources: set[str] | None = None,
+    scope: SearchScope | None = None,
 ) -> RunSummary:
     health_tracker = SourceHealthTracker()
     policies = load_source_policies(registry_file)
@@ -96,7 +98,7 @@ def run_all_sources(
         recent = recent_statuses.get(policy.name, [])
         previous = recent[0] if recent else None
         before_previous = recent[1] if len(recent) > 1 else None
-        scraper = factory(settings)
+        scraper = factory(settings, scope)
         try:
             logger.info("Running source=%s", policy.name)
             listings = scraper.search(max_retries=policy.max_retries)
