@@ -38,11 +38,16 @@ class SQLiteStore:
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path)
         connection.row_factory = sqlite3.Row
+        # WAL makes the per-listing commits cheap; NORMAL is still crash-safe in WAL mode.
+        connection.execute("PRAGMA synchronous = NORMAL")
         return connection
 
     def _init_db(self) -> None:
         logger.info("Initializing SQLite database at %s", self.database_path)
         with self._connect() as connection:
+            # WAL lets slash commands read while the scrape cycle writes. The mode is
+            # stored in the database file, so this converts existing databases too.
+            connection.execute("PRAGMA journal_mode = WAL")
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS listings (

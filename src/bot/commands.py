@@ -42,9 +42,10 @@ def register_commands(bot: HuurBot) -> None:
     async def listings(
         interaction: discord.Interaction, limit: app_commands.Range[int, 1, 25] = 10
     ) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
         profile = await asyncio.to_thread(bot.store.get_profile, interaction.user.id)
         if profile is None:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "You don't have a profile yet. Run /profile to create one.", ephemeral=True
             )
             return
@@ -56,10 +57,11 @@ def register_commands(bot: HuurBot) -> None:
             [listing.to_record() for listing in matches],
             empty_text="No current listings match your profile.",
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     @tree.command(name="status", description="Show scheduler state and the last run per source")
     async def status(interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
         rows = await asyncio.to_thread(bot.store.get_latest_source_runs)
         profiles = await asyncio.to_thread(bot.store.list_profiles)
         active = sum(1 for profile in profiles if not profile.paused)
@@ -67,26 +69,30 @@ def register_commands(bot: HuurBot) -> None:
         embed = build_status_embed(
             bot.paused, bot.cycle_running, next_run, bot.last_cycle_at, rows, (active, len(profiles))
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     @tree.command(name="profile", description="Create or edit your search profile")
     async def profile(interaction: discord.Interaction) -> None:
+        # Acknowledge first: the DB read can be slow while a scrape cycle is writing,
+        # and Discord drops interactions that aren't answered within 3 seconds.
+        await interaction.response.defer(ephemeral=True, thinking=True)
         existing = await asyncio.to_thread(bot.store.get_profile, interaction.user.id)
         if existing is None:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 embed=build_no_profile_embed(),
                 view=CreateProfileView(bot, interaction.user.id),
                 ephemeral=True,
             )
             return
-        await interaction.response.send_message(ephemeral=True, **panel_message(bot, existing))
+        await interaction.followup.send(ephemeral=True, **panel_message(bot, existing))
 
     @tree.command(name="profiles", description="List everyone's search profiles")
     async def profiles(interaction: discord.Interaction) -> None:
         if not await ensure_control(interaction):
             return
+        await interaction.response.defer(ephemeral=True, thinking=True)
         rows = await asyncio.to_thread(bot.store.list_profiles)
-        await interaction.response.send_message(embed=build_profiles_list_embed(rows), ephemeral=True)
+        await interaction.followup.send(embed=build_profiles_list_embed(rows), ephemeral=True)
 
     @tree.command(name="scrape", description="Run a scrape cycle now")
     @app_commands.describe(sources="Comma-separated source names (default: all)")
