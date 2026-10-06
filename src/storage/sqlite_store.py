@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
 import logging
 import sqlite3
@@ -7,9 +8,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.models.listing import Listing
+from src.models.profile import Profile
 
 
 logger = logging.getLogger(__name__)
+
+PROFILE_COLUMNS = (
+    "id, owner_user_id, channel_id, max_rent_eur, min_size_m2, preferred_bedrooms, "
+    "allow_close_match, municipalities, paused"
+)
+
+
+def _utc_now() -> str:
+    return dt.datetime.now(tz=dt.timezone.utc).isoformat()
 
 
 @dataclass
@@ -81,6 +92,33 @@ class SQLiteStore:
                 CREATE TABLE IF NOT EXISTS bot_state (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS profiles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    owner_user_id INTEGER NOT NULL UNIQUE,
+                    channel_id INTEGER NOT NULL,
+                    max_rent_eur INTEGER NOT NULL,
+                    min_size_m2 INTEGER NOT NULL,
+                    preferred_bedrooms INTEGER NOT NULL,
+                    allow_close_match INTEGER NOT NULL,
+                    municipalities TEXT NOT NULL,
+                    paused INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS profile_alerts (
+                    profile_id INTEGER NOT NULL,
+                    dedupe_key TEXT NOT NULL,
+                    sent_at TEXT NOT NULL,
+                    PRIMARY KEY (profile_id, dedupe_key)
                 )
                 """
             )
@@ -283,3 +321,168 @@ class SQLiteStore:
                 ORDER BY runs.source_site
                 """
             ).fetchall()
+
+    @staticmethod
+    def _row_to_profile(row: sqlite3.Row) -> Profile:
+        return Profile(
+            id=row["id"],
+            owner_user_id=row["owner_user_id"],
+            channel_id=row["channel_id"],
+            max_rent_eur=row["max_rent_eur"],
+            min_size_m2=row["min_size_m2"],
+            preferred_bedrooms=row["preferred_bedrooms"],
+            allow_close_match=bool(row["allow_close_match"]),
+            municipalities=tuple(json.loads(row["municipalities"])),
+            paused=bool(row["paused"]),
+        )
+
+    @staticmethod
+    def _row_to_listing(row: sqlite3.Row) -> Listing:
+        return Listing(
+            source_site=row["source_site"],
+            source_listing_id=row["source_listing_id"],
+            source_url=row["source_url"],
+            title=row["title"],
+            city=row["city"],
+            rent_price=row["rent_price"],
+            living_area_m2=row["living_area_m2"],
+            rooms_total=row["rooms_total"],
+            bedrooms=row["bedrooms"],
+            available_from=row["available_from"],
+            raw_features=json.loads(row["raw_features"] or "{}"),
+            is_available=bool(row["is_available"]),
+            first_seen_at=row["first_seen_at"],
+            last_seen_at=row["last_seen_at"],
+            last_changed_at=row["last_changed_at"],
+            listing_status=row["listing_status"],
+        )
+
+    def create_profile(
+        self,
+        *,
+        owner_user_id: int,
+        channel_id: int,
+        max_rent_eur: int,
+        min_size_m2: int,
+        preferred_bedrooms: int,
+        allow_close_match: bool,
+        municipalities: tuple[str, ...],
+    ) -> Profile:
+        now = _utc_now()
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO profiles (
+                    owner_user_id, channel_id, max_rent_eur, min_size_m2, preferred_bedrooms,
+                    allow_close_match, municipalities, paused, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+                """,
+                (
+                    owner_user_id,
+                    channel_id,
+                    max_rent_eur,
+                    min_size_m2,
+                    preferred_bedrooms,
+                    1 if allow_close_match else 0,
+                    json.dumps(list(municipalities)),
+                    now,
+                    now,
+                ),
+            )
+            profile_id = cursor.lastrowid
+        profile = self.get_profile_by_id(profile_id)
+        assert profile is not None
+        return profile
+
+    def get_profile(self, owner_user_id: int) -> Profile | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                f"SELECT {PROFILE_COLUMNS} FROM profiles WHERE owner_user_id = ?", (owner_user_id,)
+            ).fetchone()
+        return self._row_to_profile(row) if row is not None else None
+
+    def get_profile_by_id(self, profile_id: int) -> Profile | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                f"SELECT {PROFILE_COLUMNS} FROM profiles WHERE id = ?", (profile_id,)
+            ).fetchone()
+        return self._row_to_profile(row) if row is not None else None
+
+    def list_profiles(self, active_only: bool = False) -> list[Profile]:
+        query = f"SELECT {PROFILE_COLUMNS} FROM profiles"
+        if active_only:
+            query += " WHERE paused = 0"
+        with self._connect() as connection:
+            rows = connection.execute(query + " ORDER BY id").fetchall()
+        return [self._row_to_profile(row) for row in rows]
+
+    def update_profile(self, profile: Profile) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE profiles
+                SET channel_id = ?, max_rent_eur = ?, min_size_m2 = ?, preferred_bedrooms = ?,
+                    allow_close_match = ?, municipalities = ?, paused = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    profile.channel_id,
+                    profile.max_rent_eur,
+                    profile.min_size_m2,
+                    profile.preferred_bedrooms,
+                    1 if profile.allow_close_match else 0,
+                    json.dumps(list(profile.municipalities)),
+                    1 if profile.paused else 0,
+                    _utc_now(),
+                    profile.id,
+                ),
+            )
+
+    def set_profile_paused(self, profile_id: int, paused: bool) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "UPDATE profiles SET paused = ?, updated_at = ? WHERE id = ?",
+                (1 if paused else 0, _utc_now(), profile_id),
+            )
+
+    def delete_profile(self, profile_id: int) -> None:
+        with self._connect() as connection:
+            connection.execute("DELETE FROM profile_alerts WHERE profile_id = ?", (profile_id,))
+            connection.execute("DELETE FROM profiles WHERE id = ?", (profile_id,))
+
+    def get_alerted_keys(self, profile_id: int) -> set[str]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT dedupe_key FROM profile_alerts WHERE profile_id = ?", (profile_id,)
+            ).fetchall()
+        return {row["dedupe_key"] for row in rows}
+
+    def record_alert(self, profile_id: int, dedupe_key: str, sent_at: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO profile_alerts (profile_id, dedupe_key, sent_at) VALUES (?, ?, ?)",
+                (profile_id, dedupe_key, sent_at),
+            )
+
+    def mark_all_listings_sent(self, profile_id: int, sent_at: str) -> int:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT OR IGNORE INTO profile_alerts (profile_id, dedupe_key, sent_at)
+                SELECT ?, dedupe_key, ? FROM listings
+                """,
+                (profile_id, sent_at),
+            )
+            return cursor.rowcount
+
+    def get_dispatch_candidates(self, seen_since: str) -> list[tuple[str, Listing]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM listings
+                WHERE is_available = 1 AND last_seen_at >= ?
+                ORDER BY first_seen_at, dedupe_key
+                """,
+                (seen_since,),
+            ).fetchall()
+        return [(row["dedupe_key"], self._row_to_listing(row)) for row in rows]

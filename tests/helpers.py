@@ -5,6 +5,7 @@ from pathlib import Path
 from src.config import Settings
 from src.filtering.rules import MatchResult
 from src.models.listing import Listing
+from src.models.profile import Profile
 
 
 def make_settings(**overrides) -> Settings:
@@ -53,6 +54,22 @@ def make_listing(**overrides) -> Listing:
     )
     values.update(overrides)
     return Listing(**values)
+
+
+def make_profile(**overrides) -> Profile:
+    values = dict(
+        id=1,
+        owner_user_id=42,
+        channel_id=100,
+        max_rent_eur=1000,
+        min_size_m2=40,
+        preferred_bedrooms=2,
+        allow_close_match=True,
+        municipalities=("delft", "den-haag"),
+        paused=False,
+    )
+    values.update(overrides)
+    return Profile(**values)
 
 
 def make_match(hard: bool = True, score: int = 95) -> MatchResult:
