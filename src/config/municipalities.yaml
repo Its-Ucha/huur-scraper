@@ -1,0 +1,54 @@
+# Zuid-Holland municipalities (2026). `places` are the place names listings use;
+# the first entry is the main place, used as a search center for Vb&t.
+# lat/lon is an approximate center of the municipality.
+municipalities:
+  - {key: alblasserdam, name: Alblasserdam, lat: 51.865, lon: 4.661, places: [Alblasserdam]}
+  - {key: albrandswaard, name: Albrandswaard, lat: 51.858, lon: 4.405, places: [Rhoon, Poortugaal]}
+  - {key: alphen-aan-den-rijn, name: Alphen aan den Rijn, lat: 52.129, lon: 4.656, places: [Alphen aan den Rijn, Boskoop, Hazerswoude-Dorp, Hazerswoude-Rijndijk, Koudekerk aan den Rijn, Aarlanderveen, Benthuizen, Zwammerdam]}
+  - {key: barendrecht, name: Barendrecht, lat: 51.856, lon: 4.534, places: [Barendrecht]}
+  - {key: bodegraven-reeuwijk, name: Bodegraven-Reeuwijk, lat: 52.075, lon: 4.749, places: [Bodegraven, Reeuwijk, Nieuwerbrug]}
+  - {key: capelle-aan-den-ijssel, name: Capelle aan den IJssel, lat: 51.929, lon: 4.578, places: [Capelle aan den IJssel]}
+  - {key: delft, name: Delft, lat: 52.012, lon: 4.357, places: [Delft]}
+  - {key: den-haag, name: Den Haag, lat: 52.070, lon: 4.300, places: [Den Haag, "'s-Gravenhage", Gravenhage, The Hague, Scheveningen, Loosduinen, Ypenburg, Leidschenveen]}
+  - {key: dordrecht, name: Dordrecht, lat: 51.813, lon: 4.690, places: [Dordrecht]}
+  - {key: goeree-overflakkee, name: Goeree-Overflakkee, lat: 51.750, lon: 4.150, places: [Middelharnis, Sommelsdijk, Ouddorp, Dirksland, Oude-Tonge, Stellendam, Goedereede, Den Bommel]}
+  - {key: gorinchem, name: Gorinchem, lat: 51.836, lon: 4.973, places: [Gorinchem]}
+  - {key: gouda, name: Gouda, lat: 52.011, lon: 4.710, places: [Gouda]}
+  - {key: hardinxveld-giessendam, name: Hardinxveld-Giessendam, lat: 51.828, lon: 4.840, places: [Hardinxveld-Giessendam]}
+  - {key: hendrik-ido-ambacht, name: Hendrik-Ido-Ambacht, lat: 51.844, lon: 4.639, places: [Hendrik-Ido-Ambacht]}
+  - {key: hillegom, name: Hillegom, lat: 52.291, lon: 4.583, places: [Hillegom]}
+  - {key: hoeksche-waard, name: Hoeksche Waard, lat: 51.760, lon: 4.450, places: [Oud-Beijerland, "'s-Gravendeel", Strijen, Numansdorp, Puttershoek, Klaaswaal, Maasdam, Mijnsheerenland, Westmaas, Heinenoord]}
+  - {key: kaag-en-braassem, name: Kaag en Braassem, lat: 52.200, lon: 4.650, places: [Roelofarendsveen, Leimuiden, Rijnsaterwoude, Hoogmade, Woubrugge, Oude Wetering, Nieuwe Wetering, Rijpwetering, Oud Ade, Buitenkaag]}
+  - {key: katwijk, name: Katwijk, lat: 52.200, lon: 4.415, places: [Katwijk, Rijnsburg]}
+  - {key: krimpen-aan-den-ijssel, name: Krimpen aan den IJssel, lat: 51.917, lon: 4.600, places: [Krimpen aan den IJssel]}
+  - {key: krimpenerwaard, name: Krimpenerwaard, lat: 51.967, lon: 4.766, places: [Schoonhoven, Bergambacht, Ouderkerk aan den IJssel, Lekkerkerk, Stolwijk, Haastrecht, Ammerstol, Gouderak, Krimpen aan de Lek]}
+  - {key: lansingerland, name: Lansingerland, lat: 52.004, lon: 4.494, places: [Berkel en Rodenrijs, Bergschenhoek, Bleiswijk]}
+  - {key: leiden, name: Leiden, lat: 52.160, lon: 4.497, places: [Leiden]}
+  - {key: leiderdorp, name: Leiderdorp, lat: 52.158, lon: 4.536, places: [Leiderdorp]}
+  - {key: leidschendam-voorburg, name: Leidschendam-Voorburg, lat: 52.079, lon: 4.404, places: [Leidschendam, Voorburg, Stompwijk]}
+  - {key: lisse, name: Lisse, lat: 52.258, lon: 4.557, places: [Lisse]}
+  - {key: maassluis, name: Maassluis, lat: 51.923, lon: 4.250, places: [Maassluis]}
+  - {key: midden-delfland, name: Midden-Delfland, lat: 51.965, lon: 4.290, places: [Maasland, Schipluiden, Den Hoorn]}
+  - {key: molenlanden, name: Molenlanden, lat: 51.880, lon: 4.800, places: [Nieuw-Lekkerland, Groot-Ammers, Bleskensgraaf, Giessenburg, Arkel, Hoornaar, Streefkerk, Brandwijk, Goudriaan, Ottoland, Noordeloos, Kinderdijk]}
+  - {key: nieuwkoop, name: Nieuwkoop, lat: 52.150, lon: 4.775, places: [Nieuwkoop, Nieuwveen, Ter Aar, Zevenhoven, Noorden, Langeraar]}
+  - {key: nissewaard, name: Nissewaard, lat: 51.845, lon: 4.320, places: [Spijkenisse, Zuidland, Hekelingen, Simonshaven, Abbenbroek, Geervliet, Heenvliet]}
+  - {key: noordwijk, name: Noordwijk, lat: 52.240, lon: 4.445, places: [Noordwijk, Noordwijkerhout, De Zilk]}
+  - {key: oegstgeest, name: Oegstgeest, lat: 52.180, lon: 4.470, places: [Oegstgeest]}
+  - {key: papendrecht, name: Papendrecht, lat: 51.832, lon: 4.688, places: [Papendrecht]}
+  - {key: pijnacker-nootdorp, name: Pijnacker-Nootdorp, lat: 52.030, lon: 4.430, places: [Pijnacker, Nootdorp, Delfgauw]}
+  - {key: ridderkerk, name: Ridderkerk, lat: 51.872, lon: 4.603, places: [Ridderkerk, Bolnes, Rijsoord]}
+  - {key: rijswijk, name: Rijswijk, lat: 52.036, lon: 4.325, places: [Rijswijk, Rijswijk ZH]}
+  - {key: rotterdam, name: Rotterdam, lat: 51.922, lon: 4.479, places: [Rotterdam, Hoogvliet, Rozenburg, Pernis, Hoek van Holland]}
+  - {key: schiedam, name: Schiedam, lat: 51.919, lon: 4.400, places: [Schiedam]}
+  - {key: sliedrecht, name: Sliedrecht, lat: 51.821, lon: 4.774, places: [Sliedrecht]}
+  - {key: teylingen, name: Teylingen, lat: 52.220, lon: 4.510, places: [Sassenheim, Voorhout, Warmond]}
+  - {key: vlaardingen, name: Vlaardingen, lat: 51.912, lon: 4.341, places: [Vlaardingen]}
+  - {key: voorne-aan-zee, name: Voorne aan Zee, lat: 51.860, lon: 4.150, places: [Hellevoetsluis, Brielle, Rockanje, Oostvoorne, Zwartewaal, Vierpolders]}
+  - {key: voorschoten, name: Voorschoten, lat: 52.127, lon: 4.448, places: [Voorschoten]}
+  - {key: waddinxveen, name: Waddinxveen, lat: 52.045, lon: 4.650, places: [Waddinxveen]}
+  - {key: wassenaar, name: Wassenaar, lat: 52.143, lon: 4.400, places: [Wassenaar]}
+  - {key: westland, name: Westland, lat: 51.990, lon: 4.210, places: [Naaldwijk, Monster, "'s-Gravenzande", Wateringen, De Lier, Poeldijk, Honselersdijk, Maasdijk, Kwintsheul, Ter Heijde]}
+  - {key: zoetermeer, name: Zoetermeer, lat: 52.057, lon: 4.493, places: [Zoetermeer]}
+  - {key: zoeterwoude, name: Zoeterwoude, lat: 52.120, lon: 4.495, places: [Zoeterwoude]}
+  - {key: zuidplas, name: Zuidplas, lat: 52.010, lon: 4.610, places: [Nieuwerkerk aan den IJssel, Moordrecht, Zevenhuizen, Moerkapelle]}
+  - {key: zwijndrecht, name: Zwijndrecht, lat: 51.815, lon: 4.640, places: [Zwijndrecht, Heerjansdam]}
