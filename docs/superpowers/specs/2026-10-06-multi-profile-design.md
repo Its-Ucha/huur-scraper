@@ -142,8 +142,8 @@ class SearchScope:
 `vbent_area(scope) -> tuple[str, int]` is a pure function next to `VBentScraper`:
 
 - If `scope` is empty or `None`, return `("Delft", 15)`, today's behaviour.
-- Otherwise try each municipality in the YAML as the center. Its required radius is the largest haversine distance from that center to any selected municipality's coordinates. Pick the center with the smallest required radius (ties go to the alphabetically first key), then add 5 km to cover the municipality's own extent, round up to a whole kilometre, and cap at 50 km.
-- The center is passed as the municipality's `name` in the `filter_properties` cookie (`city`, `radius`). The rest of `filter_template` stays as it is.
+- Otherwise try each municipality in the YAML as the center. Its required radius is the largest haversine distance from that center to any selected municipality's coordinates. Pick the center with the smallest required radius (ties go to the alphabetically first key), then add 5 km to cover the municipality's own extent, round up to a whole kilometre, and clamp to 10–50 km (a lone large municipality such as Den Haag needs more than 5 km).
+- The center is passed as the municipality's **main place** (the first entry of its `places` list, e.g. `Leidschendam` for Leidschendam-Voorburg) in the `filter_properties` cookie (`city`, `radius`), because Vb&t geocodes place names, not municipality names. The rest of `filter_template` stays as it is.
 - **To verify during implementation:** does the Vb&t API take any integer radius, or does it snap to fixed steps? Probes on 2026-10-06 accepted 15, 30 and 40 km (8, 10 and 20 pages). If it snaps, round up to the next accepted step.
 - Expected cost: selecting Den Haag, Delft and Rijswijk gives roughly today's 8 pages. A profile spanning the whole province gives up to about 25 pages. `max_pages` (100) still applies as a safety limit.
 
@@ -196,7 +196,7 @@ Every save writes `updated_at` and runs `run_dispatch([profile])` (not for Delet
 
 ### Weekly cleanup
 
-`clear_loop` purges every active profile channel (bot messages that aren't pinned) instead of the single alert channel, under the same `listings_cleared_at` schedule. Archived channels aren't touched. If one channel fails, that's logged and the rest continue.
+`clear_loop` purges every profile's channel, paused ones included (bot messages that aren't pinned), instead of the single alert channel, under the same `listings_cleared_at` schedule. Archived channels aren't touched. If one channel fails, that's logged and the rest continue.
 
 ## Configuration
 
