@@ -40,14 +40,23 @@ class StoreStateTests(unittest.TestCase):
     def test_latest_source_runs_empty(self) -> None:
         self.assertEqual(self.store.get_latest_source_runs(), [])
 
-    def test_recent_source_statuses_newest_first(self) -> None:
+    def test_failure_streaks_since_last_good_run(self) -> None:
+        self.store.write_source_run("alpha", "2026-10-05T09:50:00+00:00", "error", "")
         self.store.write_source_run("alpha", "2026-10-05T10:00:00+00:00", "ok", "")
         self.store.write_source_run("alpha", "2026-10-05T10:10:00+00:00", "error", "")
         self.store.write_source_run("alpha", "2026-10-05T10:20:00+00:00", "blocked", "")
-        self.store.write_source_run("beta", "2026-10-05T10:00:00+00:00", "ok", "")
+        self.store.write_source_run("beta", "2026-10-05T10:00:00+00:00", "error", "")
+        self.store.write_source_run("beta", "2026-10-05T10:10:00+00:00", "ok", "")
+        self.store.write_source_run("gamma", "2026-10-05T10:00:00+00:00", "error", "")
         self.assertEqual(
-            self.store.get_recent_source_statuses(per_source=2),
-            {"alpha": ["blocked", "error"], "beta": ["ok"]},
+            self.store.get_failure_streaks(),
+            {
+                "alpha": [
+                    ("2026-10-05T10:10:00+00:00", "error"),
+                    ("2026-10-05T10:20:00+00:00", "blocked"),
+                ],
+                "gamma": [("2026-10-05T10:00:00+00:00", "error")],
+            },
         )
 
 

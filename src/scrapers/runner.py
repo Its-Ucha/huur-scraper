@@ -18,6 +18,9 @@ from src.storage.sqlite_store import SQLiteStore
 logger = logging.getLogger(__name__)
 
 FAILED_STATUSES = ("blocked", "error")
+# Vb&t's API goes down for ~20 minutes around the top of every hour, so an
+# error is only announced once a source has been failing for longer than that.
+ERROR_ALERT_AFTER = dt.timedelta(minutes=45)
 
 
 @dataclass
@@ -40,11 +43,17 @@ def _now() -> str:
     return dt.datetime.now(tz=dt.timezone.utc).isoformat()
 
 
-def _failure_was_announced(previous: str | None, before_previous: str | None) -> bool:
+def _streak_age(streak: list[tuple[str, str]], until: str) -> dt.timedelta:
+    return dt.datetime.fromisoformat(until) - dt.datetime.fromisoformat(streak[0][0])
+
+
+def _failure_was_announced(streak: list[tuple[str, str]]) -> bool:
     """Whether the failure streak ending in the previous run produced an ops alert."""
-    if previous == "blocked":
+    if not streak:
+        return False
+    if any(status == "blocked" for _, status in streak):
         return True
-    return previous == "error" and before_previous in FAILED_STATUSES
+    return _streak_age(streak, streak[-1][0]) >= ERROR_ALERT_AFTER
 
 
 def run_all_sources(
@@ -59,9 +68,9 @@ def run_all_sources(
     health_tracker = SourceHealthTracker()
     policies = load_source_policies(registry_file)
     # Ops alerts fire only when a source's status changes, so a source that stays
-    # broken does not post on every cycle. Errors are announced on the second
-    # failed run in a row, so a one-off timeout stays quiet.
-    recent_statuses = store.get_recent_source_statuses(per_source=2)
+    # broken does not post on every cycle. Errors are announced once a source has
+    # been failing for ERROR_ALERT_AFTER, so short outages stay quiet.
+    failure_streaks = store.get_failure_streaks()
     summary = RunSummary()
     logger.info("Loaded %d source policies from %s", len(policies), registry_file)
 
@@ -95,9 +104,8 @@ def run_all_sources(
             )
             continue
 
-        recent = recent_statuses.get(policy.name, [])
-        previous = recent[0] if recent else None
-        before_previous = recent[1] if len(recent) > 1 else None
+        streak = failure_streaks.get(policy.name, [])
+        previous = streak[-1][1] if streak else None
         scraper = factory(settings, scope)
         try:
             logger.info("Running source=%s", policy.name)
@@ -129,7 +137,7 @@ def run_all_sources(
                     details=details,
                 )
             )
-            if _failure_was_announced(previous, before_previous):
+            if _failure_was_announced(streak):
                 notifier.notify_ops(f"[SOURCE_RECOVERED] {policy.name}")
 
         except SourceBlockedError as error:
@@ -151,14 +159,16 @@ def run_all_sources(
 
         except Exception as error:  # noqa: BLE001
             logger.exception("Source failed source=%s", policy.name)
+            run_at = _now()
             store.write_source_run(
                 source_site=policy.name,
-                run_at=_now(),
+                run_at=run_at,
                 status="error",
                 details=str(error),
             )
             summary.results.append(SourceResult(name=policy.name, status="error", details=str(error)))
-            if previous == "error" and before_previous != "error":
+            current = [*streak, (run_at, "error")]
+            if not _failure_was_announced(streak) and _failure_was_announced(current):
                 notifier.notify_ops(f"[SOURCE_ERROR] {policy.name} - {error}")
 
     return summary

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import copy
+import datetime as dt
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from src.scrapers.base import SourceBlockedError
 from src.scrapers.runner import run_all_sources
@@ -66,11 +68,17 @@ class RunnerTests(unittest.TestCase):
         self.match = make_listing(source_site="alpha", source_listing_id="m1")
         self.non_match = make_listing(source_site="alpha", source_listing_id="n1", rent_price=3000)
         self.factories = {"alpha": returning([self.match, self.non_match]), "beta": returning([])}
+        # Each run is ten minutes after the previous one, like the bot's scheduler.
+        self.clock = dt.datetime(2026, 10, 8, 12, 0, tzinfo=dt.timezone.utc)
+        clock_patch = patch("src.scrapers.runner._now", lambda: self.clock.isoformat())
+        clock_patch.start()
+        self.addCleanup(clock_patch.stop)
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
     def run_once(self, selected=None, scope=None):
+        self.clock += dt.timedelta(minutes=10)
         return run_all_sources(
             settings=self.settings,
             store=self.store,
@@ -137,20 +145,31 @@ class RunnerTests(unittest.TestCase):
         self.run_once()
         self.assertEqual(self.notifier.ops[1:], ["[SOURCE_RECOVERED] beta"])
 
-    def test_error_source_notifies_on_second_failure_until_recovered(self) -> None:
+    def test_error_source_notifies_after_failing_45_minutes_until_recovered(self) -> None:
         self.factories["beta"] = raising(RuntimeError("boom"))
         summary = self.run_once()
         beta = self.result(summary, "beta")
         self.assertEqual((beta.status, beta.details), ("error", "boom"))
+
+        for _ in range(4):  # failing for 40 minutes
+            self.run_once()
         self.assertEqual(self.notifier.ops, [])
 
-        self.run_once()
+        self.run_once()  # 50 minutes
         self.run_once()
         self.assertEqual(self.notifier.ops, ["[SOURCE_ERROR] beta - boom"])
 
         self.factories["beta"] = returning([])
         self.run_once()
         self.assertEqual(self.notifier.ops[-1], "[SOURCE_RECOVERED] beta")
+
+    def test_short_outage_stays_quiet(self) -> None:
+        self.factories["beta"] = raising(RuntimeError("timed out"))
+        for _ in range(3):  # failing for 20 minutes
+            self.run_once()
+        self.factories["beta"] = returning([])
+        self.run_once()
+        self.assertEqual(self.notifier.ops, [])
 
     def test_single_error_then_ok_stays_quiet(self) -> None:
         self.factories["beta"] = raising(RuntimeError("timed out"))

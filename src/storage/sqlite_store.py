@@ -270,26 +270,31 @@ class SQLiteStore:
                 (key, value),
             )
 
-    def get_recent_source_statuses(self, per_source: int = 2) -> dict[str, list[str]]:
-        """Return each source's last statuses, newest first."""
+    def get_failure_streaks(self) -> dict[str, list[tuple[str, str]]]:
+        """Return each source's failed runs since its last good run as (run_at, status), oldest first.
+
+        Sources whose latest run did not fail are left out.
+        """
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT source_site, status
-                FROM (
-                    SELECT source_site, status, id,
-                        ROW_NUMBER() OVER (PARTITION BY source_site ORDER BY id DESC) AS rank
+                WITH last_good AS (
+                    SELECT source_site,
+                        MAX(CASE WHEN status NOT IN ('blocked', 'error') THEN id ELSE 0 END) AS id
                     FROM source_runs
+                    GROUP BY source_site
                 )
-                WHERE rank <= ?
-                ORDER BY source_site, id DESC
-                """,
-                (per_source,),
+                SELECT runs.source_site, runs.run_at, runs.status
+                FROM source_runs AS runs
+                JOIN last_good ON last_good.source_site = runs.source_site
+                WHERE runs.id > last_good.id
+                ORDER BY runs.source_site, runs.id
+                """
             ).fetchall()
-        statuses: dict[str, list[str]] = {}
+        streaks: dict[str, list[tuple[str, str]]] = {}
         for row in rows:
-            statuses.setdefault(row["source_site"], []).append(row["status"])
-        return statuses
+            streaks.setdefault(row["source_site"], []).append((row["run_at"], row["status"]))
+        return streaks
 
     def get_latest_source_runs(self) -> list[sqlite3.Row]:
         with self._connect() as connection:
