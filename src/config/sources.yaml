@@ -54,8 +54,10 @@ sources:
     min_interval_seconds: 3600
     max_retries: 0
     auto_disable_on_block: true
+  # Vb&t's nginx returned 403 for the homelab IP (2026-10-30). Keep it off until
+  # the site opens again in a normal browser; do not work around the block.
   - name: vbent
-    mode: SCRAPE
+    mode: ALERT_INGEST
     min_interval_seconds: 3600
     max_retries: 2
     auto_disable_on_block: true

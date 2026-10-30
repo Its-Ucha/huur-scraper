@@ -24,3 +24,10 @@ def load_source_policies(file_path: Path) -> list[SourcePolicy]:
         )
 
     return policies
+
+
+def slowest_scrape_interval_seconds(policies: list[SourcePolicy]) -> int:
+    return max(
+        (p.min_interval_seconds for p in policies if p.mode == SourceMode.SCRAPE),
+        default=0,
+    )

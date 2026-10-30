@@ -177,6 +177,10 @@ class DispatchTests(unittest.TestCase):
         self.assertIsNone(marks["new"])
         self.assertEqual(marks["applied"].state, APPLIED)
 
+    def test_stale_window_covers_slowest_source(self) -> None:
+        self.assertEqual(stale_window(10), dt.timedelta(minutes=30))
+        self.assertEqual(stale_window(10, slowest_source_seconds=3600), dt.timedelta(hours=3))
+
     def test_is_current(self) -> None:
         now = dt.datetime.now(tz=dt.timezone.utc)
         window = stale_window(10)

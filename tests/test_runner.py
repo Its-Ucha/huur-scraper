@@ -26,6 +26,11 @@ sources:
     min_interval_seconds: 60
     max_retries: 0
     auto_disable_on_block: true
+  - name: delta
+    mode: SCRAPE
+    min_interval_seconds: 1200
+    max_retries: 0
+    auto_disable_on_block: true
   - name: gamma
     mode: ALERT_INGEST
     min_interval_seconds: 60
@@ -67,7 +72,11 @@ class RunnerTests(unittest.TestCase):
         self.notifier = RecordingNotifier()
         self.match = make_listing(source_site="alpha", source_listing_id="m1")
         self.non_match = make_listing(source_site="alpha", source_listing_id="n1", rent_price=3000)
-        self.factories = {"alpha": returning([self.match, self.non_match]), "beta": returning([])}
+        self.factories = {
+            "alpha": returning([self.match, self.non_match]),
+            "beta": returning([]),
+            "delta": returning([]),
+        }
         # Each run is ten minutes after the previous one, like the bot's scheduler.
         self.clock = dt.datetime(2026, 10, 8, 12, 0, tzinfo=dt.timezone.utc)
         clock_patch = patch("src.scrapers.runner._now", lambda: self.clock.isoformat())
@@ -117,14 +126,14 @@ class RunnerTests(unittest.TestCase):
 
         self.factories = {"alpha": _Scraper, "beta": _Scraper}
         scope = SearchScope(frozenset({"delft"}))
-        self.run_once(scope=scope)
+        self.run_once(selected={"alpha", "beta"}, scope=scope)
         self.assertEqual(seen, [scope, scope])
 
     def test_policy_skipped_and_unselected_sources_not_in_summary(self) -> None:
         summary = self.run_once(selected={"alpha"})
         self.assertEqual([r.name for r in summary.results], ["alpha"])
         all_sources = self.run_once()
-        self.assertEqual(sorted(r.name for r in all_sources.results), ["alpha", "beta"])
+        self.assertEqual(sorted(r.name for r in all_sources.results), ["alpha", "beta", "delta"])
 
     def test_missing_adapter_is_error_result_without_ops(self) -> None:
         del self.factories["beta"]
@@ -196,6 +205,37 @@ class RunnerTests(unittest.TestCase):
         self.run_once()
         self.assertEqual(len(self.notifier.ops), 1)
         self.assertTrue(self.notifier.ops[0].startswith("[SOURCE_BLOCKED] beta"))
+
+    def test_source_waits_for_min_interval(self) -> None:
+        calls = []
+
+        class _Scraper:
+            def __init__(self, settings, scope=None) -> None:
+                pass
+
+            def search(self, max_retries: int = 0):
+                calls.append(1)
+                return []
+
+        self.factories["delta"] = _Scraper
+        self.assertEqual(self.result(self.run_once(), "delta").status, "ok")
+        waiting = self.result(self.run_once(), "delta")  # 10 of 20 minutes
+        self.assertEqual((waiting.status, waiting.details), ("skipped", "next run in 10 min"))
+        self.assertEqual(self.result(self.run_once(), "delta").status, "ok")
+        self.assertEqual(len(calls), 2)
+        # Waiting writes no source_runs row, so the last real attempt stays visible.
+        latest = {row["source_site"]: row["status"] for row in self.store.get_latest_source_runs()}
+        self.assertEqual(latest["delta"], "ok")
+
+    def test_min_interval_counts_failed_attempts_and_manual_runs(self) -> None:
+        self.factories["delta"] = raising(SourceBlockedError("403"))
+        self.run_once(selected={"delta"})
+        self.assertEqual(self.result(self.run_once(selected={"delta"}), "delta").status, "skipped")
+
+    def test_min_interval_has_grace_for_scrape_duration(self) -> None:
+        self.run_once()
+        self.clock += dt.timedelta(minutes=9, seconds=30)  # next cycle 19.5 min later
+        self.assertEqual(self.result(self.run_once(), "delta").status, "ok")
 
     def test_first_ever_ok_run_does_not_send_recovered(self) -> None:
         self.run_once()

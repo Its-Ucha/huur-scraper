@@ -15,6 +15,7 @@ from src.notify.base import Notifier
 from src.notify.discord_notifier import DiscordNotifier
 from src.notify.dispatch import DispatchSummary, dispatch, stale_window
 from src.scrapers.factories import REGISTRY_FILE, SOURCE_FACTORIES
+from src.scrapers.registry import load_source_policies, slowest_scrape_interval_seconds
 from src.scrapers.runner import RunSummary, run_all_sources
 from src.scrapers.scope import SearchScope
 from src.storage.sqlite_store import SQLiteStore
@@ -50,6 +51,9 @@ class HuurBot(discord.Client):
         # Keeps fire-and-forget dispatch tasks referenced until they finish.
         self._background_tasks: set[asyncio.Task] = set()
         self.scrape_loop.change_interval(minutes=settings.scrape_interval_minutes)
+        self._slowest_source_seconds = slowest_scrape_interval_seconds(
+            load_source_policies(REGISTRY_FILE)
+        )
 
     @property
     def paused(self) -> bool:
@@ -64,7 +68,7 @@ class HuurBot(discord.Client):
 
     @property
     def stale_after(self) -> dt.timedelta:
-        return stale_window(self.settings.scrape_interval_minutes)
+        return stale_window(self.settings.scrape_interval_minutes, self._slowest_source_seconds)
 
     async def setup_hook(self) -> None:
         from src.bot.commands import register_commands

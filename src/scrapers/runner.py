@@ -21,6 +21,10 @@ FAILED_STATUSES = ("blocked", "error")
 # Vb&t's API goes down for ~20 minutes around the top of every hour, so an
 # error is only announced once a source has been failing for longer than that.
 ERROR_ALERT_AFTER = dt.timedelta(minutes=45)
+# run_at is written when a source finishes, so cycle-to-cycle gaps jitter by
+# the scrape duration. Without slack a 20-minute source on a 10-minute cycle
+# would often wait 30 minutes.
+INTERVAL_GRACE = dt.timedelta(seconds=60)
 
 
 @dataclass
@@ -56,6 +60,15 @@ def _failure_was_announced(streak: list[tuple[str, str]]) -> bool:
     return _streak_age(streak, streak[-1][0]) >= ERROR_ALERT_AFTER
 
 
+def _wait_remaining(last_attempt: str | None, min_interval_seconds: int, now: str) -> dt.timedelta | None:
+    """How long until a source may run again, or None if it may run now."""
+    if last_attempt is None:
+        return None
+    elapsed = dt.datetime.fromisoformat(now) - dt.datetime.fromisoformat(last_attempt)
+    remaining = dt.timedelta(seconds=min_interval_seconds) - elapsed
+    return remaining if remaining > INTERVAL_GRACE else None
+
+
 def run_all_sources(
     settings: Settings,
     store: SQLiteStore,
@@ -71,6 +84,7 @@ def run_all_sources(
     # broken does not post on every cycle. Errors are announced once a source has
     # been failing for ERROR_ALERT_AFTER, so short outages stay quiet.
     failure_streaks = store.get_failure_streaks()
+    last_attempts = store.get_last_attempts()
     summary = RunSummary()
     logger.info("Loaded %d source policies from %s", len(policies), registry_file)
 
@@ -101,6 +115,17 @@ def run_all_sources(
             )
             summary.results.append(
                 SourceResult(name=policy.name, status="error", details="no scraper adapter")
+            )
+            continue
+
+        # Applies to manual runs too: the interval protects the site, not us.
+        # No source_runs row, so failure streaks and /status keep the real last attempt.
+        remaining = _wait_remaining(last_attempts.get(policy.name), policy.min_interval_seconds, _now())
+        if remaining is not None:
+            minutes = -(-int(remaining.total_seconds()) // 60)
+            logger.info("Skipping source=%s, min interval not reached (%d min left)", policy.name, minutes)
+            summary.results.append(
+                SourceResult(name=policy.name, status="skipped", details=f"next run in {minutes} min")
             )
             continue
 

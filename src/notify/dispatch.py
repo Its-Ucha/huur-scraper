@@ -23,9 +23,11 @@ class DispatchSummary:
     paused_profile_ids: list[int] = field(default_factory=list)
 
 
-def stale_window(interval_minutes: int) -> dt.timedelta:
-    # Long enough that one failed scrape doesn't drop a source's listings.
-    return dt.timedelta(minutes=3 * interval_minutes)
+def stale_window(interval_minutes: int, slowest_source_seconds: int = 0) -> dt.timedelta:
+    # Long enough that one failed scrape doesn't drop a source's listings, also
+    # for sources whose min_interval_seconds makes them run less often than the cycle.
+    period = max(dt.timedelta(minutes=interval_minutes), dt.timedelta(seconds=slowest_source_seconds))
+    return 3 * period
 
 
 def is_current(listing: Listing, now: dt.datetime, stale_after: dt.timedelta) -> bool:

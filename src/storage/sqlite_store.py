@@ -296,6 +296,23 @@ class SQLiteStore:
             streaks.setdefault(row["source_site"], []).append((row["run_at"], row["status"]))
         return streaks
 
+    def get_last_attempts(self) -> dict[str, str]:
+        """Return each source's latest run_at that actually contacted the site (ok, blocked or error)."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT source_site, run_at
+                FROM source_runs
+                WHERE id IN (
+                    SELECT MAX(id)
+                    FROM source_runs
+                    WHERE status IN ('ok', 'blocked', 'error')
+                    GROUP BY source_site
+                )
+                """
+            ).fetchall()
+        return {row["source_site"]: row["run_at"] for row in rows}
+
     def get_latest_source_runs(self) -> list[sqlite3.Row]:
         with self._connect() as connection:
             return connection.execute(

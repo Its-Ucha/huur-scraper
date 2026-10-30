@@ -11,7 +11,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.bot.client import LISTINGS_CLEARED_AT_KEY, CycleBusyError, HuurBot
-from src.notify.dispatch import DispatchSummary
+from src.notify.dispatch import DispatchSummary, stale_window
+from src.scrapers.factories import REGISTRY_FILE
+from src.scrapers.registry import load_source_policies, slowest_scrape_interval_seconds
 from src.scrapers.runner import RunSummary, SourceResult
 from src.scrapers.scope import SearchScope
 from src.storage.sqlite_store import SQLiteStore
@@ -53,7 +55,8 @@ class HuurBotCycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["selected_sources"], {"vbent"})
         self.assertEqual(kwargs["scope"], SearchScope(frozenset({"delft"})))
         self.assertEqual(dispatcher.call_args.kwargs["profiles"], [active])
-        self.assertEqual(dispatcher.call_args.kwargs["stale_after"], dt.timedelta(minutes=30))
+        slowest = slowest_scrape_interval_seconds(load_source_policies(REGISTRY_FILE))
+        self.assertEqual(dispatcher.call_args.kwargs["stale_after"], stale_window(10, slowest))
 
     async def test_run_dispatch_waits_for_running_cycle(self) -> None:
         profile = self.store.create_profile(

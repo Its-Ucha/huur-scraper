@@ -9,6 +9,7 @@ from src.logging_setup import configure_logging
 from src.notify.base import LogNotifier
 from src.notify.dispatch import dispatch, stale_window
 from src.scrapers.factories import REGISTRY_FILE, SOURCE_FACTORIES
+from src.scrapers.registry import load_source_policies, slowest_scrape_interval_seconds
 from src.scrapers.runner import run_all_sources
 from src.storage.sqlite_store import SQLiteStore
 
@@ -114,7 +115,10 @@ def main() -> None:
         profiles=store.list_profiles(active_only=True),
         notifier=notifier,
         now=dt.datetime.now(tz=dt.timezone.utc),
-        stale_after=stale_window(settings.scrape_interval_minutes),
+        stale_after=stale_window(
+            settings.scrape_interval_minutes,
+            slowest_scrape_interval_seconds(load_source_policies(REGISTRY_FILE)),
+        ),
         record=False,
     )
     logger.info(
